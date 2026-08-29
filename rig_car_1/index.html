@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>Tiger PNGTuber v6</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #222; }
+  #stage { position: absolute; inset: 0; display: flex; justify-content: center; align-items: flex-end; }
+  #avatar { position: relative; width: 1024px; height: 1536px; transform-origin: 50% 100%; }
+  /* absolute without left/top = ทุกชิ้นกองที่มุมซ้ายบนของ container (แบบ v5) */
+  #avatar img { position: absolute; pointer-events: none; user-select: none; }
+  #head, #face, #eyesOpen { position: absolute; left: 0; top: 0; width: 1024px; height: 1536px; }
+  #head { transform-origin: 490px 880px; will-change: transform; }
+  #face { transform-origin: 490px 520px; will-change: transform; }
+  #hair { transform-origin: 490px 300px; will-change: transform; }
+  /* กะพริบ: บีบชุดตาเปิดลงหาแนวขนตา แล้วค่อยเฟดภาพหลับตาเข้าช่วงท้าย */
+  #eyesOpen { transform-origin: 489px 546px; will-change: transform; }
+  #eyesC { opacity: 0; }
+  /* ตาดำเลื่อนตามเมาส์ อยู่ในหน้าต่าง mask รูปตาขาว เลยไม่มีวันหลุดออกนอกตา */
+  #pupilw { position: absolute; left: 0; top: 0; width: 1024px; height: 1536px;
+    -webkit-mask-image: url("v6_eyes_white.png"); mask-image: url("v6_eyes_white.png");
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+  #pupils { will-change: transform; }
+  #earL { left: 204px; top: 152px; transform-origin: 87px 192px; will-change: transform; }
+  #earR { left: 628px; top: 141px; transform-origin: 91px 212px; will-change: transform; }
+  .mouth { left: 386px; top: 695px; opacity: 0; }
+
+  #bar { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
+         display: flex; gap: 10px; align-items: center; padding: 8px 14px;
+         background: rgba(20,20,20,.82); border-radius: 12px; font: 14px system-ui, sans-serif;
+         color: #eee; transition: opacity .4s; z-index: 10; }
+  #bar.hidden { opacity: 0; pointer-events: none; }
+  #bar button { border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer;
+                background: #444; color: #eee; font: inherit; }
+  #bar button.on { background: #2e7d46; }
+  .sw { width: 22px; height: 22px; border-radius: 6px; border: 2px solid #666; cursor: pointer; }
+  #meterWrap { width: 90px; height: 8px; background: #333; border-radius: 4px; overflow: hidden; }
+  #meter { height: 100%; width: 0%; background: #4caf7d; }
+  #sens { width: 110px; }
+  #hint { position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+          color: #bbb; font: 13px system-ui, sans-serif; background: rgba(20,20,20,.6);
+          padding: 6px 12px; border-radius: 8px; transition: opacity 1s; z-index: 10; }
+  #demoBadge { position: fixed; top: 12px; right: 12px; z-index: 20; display: none;
+               background: #c62828; color: #fff; font: bold 15px system-ui, sans-serif;
+               padding: 10px 14px; border-radius: 10px; cursor: pointer; }
+  #dot { position: fixed; left: 10px; bottom: 10px; width: 14px; height: 14px;
+         border-radius: 50%; background: #c33; z-index: 30; display: none; }
+  #debug { position: fixed; top: 10px; left: 10px; color: #6f6; font: 13px monospace;
+           background: rgba(0,0,0,.75); padding: 8px 12px; border-radius: 8px;
+           z-index: 30; white-space: pre; display: none; }
+  #parts { position: fixed; right: 12px; bottom: 60px; display: none; flex-direction: column;
+           gap: 6px; padding: 10px 14px; background: rgba(245,245,245,.95); border-radius: 12px;
+           font: 14px system-ui, sans-serif; color: #111; z-index: 20; }
+  #parts.open { display: flex; }
+  #parts label { cursor: pointer; user-select: none; display: flex; gap: 6px; align-items: center; }
+  #editor { position: fixed; left: 12px; bottom: 60px; display: none; flex-direction: column;
+            gap: 8px; padding: 12px 14px; background: rgba(20,20,20,.9); border-radius: 12px;
+            font: 14px system-ui, sans-serif; color: #eee; z-index: 20; max-width: 250px; }
+  #editor.open { display: flex; }
+  #editor select, #editor button, #editor input[type=range] { font: inherit; width: 100%; }
+  #editor select { background: #f5f5f5; color: #111; border-radius: 6px; padding: 3px 6px; }
+  #editor label { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+  #editor .num { width: 64px; font: inherit; background: #333; color: #eee;
+                 border: 1px solid #555; border-radius: 6px; padding: 2px 6px; }
+  #editor button { border: 0; border-radius: 8px; padding: 6px 10px; cursor: pointer; background: #444; color: #eee; }
+  #editor small { color: #999; line-height: 1.5; }
+  .editSelected { outline: 3px dashed #f5a623; outline-offset: -3px; }
+  /* ระหว่างจัดตำแหน่ง ปิด mask ตาขาวชั่วคราว — จะได้เห็นตาดำที่หลุดนอกกรอบตาแล้วลากกลับเข้าที่ได้ */
+  body.editing #pupilw { -webkit-mask-image: none !important; mask-image: none !important; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="avatar">
+    <img data-part="เงาในฮู้ด" src="v6_jacket_in.png"><!-- เงาในฮู้ด อยู่หลังหัว หัวขยับแล้วไม่โดนบัง -->
+    <!-- Hood_*.png เป็นอาร์ตบนแคนวาสวาด 1476x2085 — วางด้วยสเกล 0.77: left -60, top 38, w 1137 -->
+    <img data-part="ขอบฮู้ดหลัง" src="Hood_in.png" style="left:-60px; top:38px; width:1137px" data-w="1137">
+    <img data-part="คอ" src="v6_neck.png">
+    <div id="head">
+      <img data-part="หัว" src="v6_head_base.png">
+      <div id="face">
+        <img data-part="หน้า" src="v6_face_noeyes.png">
+        <img id="eyesC" data-part="ตาหลับ" src="v6_eyes_closed.png">
+        <div id="eyesOpen">
+          <img data-part="ตาขาว" src="v6_eyes_white.png">
+          <div id="pupilw"><img id="pupils" data-part="ตาดำ" src="v6_pupils.png"></div>
+          <img data-part="คิ้ว+ขนตา" src="v6_eyes_top.png"><!-- คิ้ว+ขนตา ทับบนตาดำ -->
+        </div>
+        <img class="mouth" data-part="ปาก" src="v6_mouth_1.png">
+        <img class="mouth" data-part="ปาก" src="v6_mouth_2.png">
+        <img class="mouth" data-part="ปาก" src="v6_mouth_3.png">
+        <img class="mouth" data-part="ปาก" src="v6_mouth_4.png">
+      </div>
+      <img id="hair" data-part="ผม" src="v6_hair.png">
+    </div>
+    <img data-part="ฮู้ด" src="v6_jacket_out.png">
+    <img data-part="ขอบฮู้ดหน้า" src="Hood_out.png" style="left:-60px; top:38px; width:1137px" data-w="1137">
+    <img id="earL" data-part="หูซ้าย" src="v6_ear_L.png">
+    <img id="earR" data-part="หูขวา" src="v6_ear_R.png">
+  </div>
+</div>
+
+<div id="bar">
+  <span id="wsState" style="color:#888">🔗 ตัวช่วย: -</span>
+  <button id="micBtn">🎤 เปิดไมค์</button>
+  <div id="meterWrap"><div id="meter"></div></div>
+  <label>ความไว <input id="sens" type="range" min="1" max="20" step="0.5"></label>
+  <span style="color:#888">พื้นหลัง:</span>
+  <div class="sw" data-bg="#00b140" style="background:#00b140"></div>
+  <div class="sw" data-bg="#0047bb" style="background:#0047bb"></div>
+  <div class="sw" data-bg="#222222" style="background:#222"></div>
+  <div class="sw" data-bg="#ffffff" style="background:#fff"></div>
+  <button id="partsBtn">🧩 ชิ้นส่วน</button>
+  <button id="editBtn">✏️ จัดตำแหน่ง</button>
+</div>
+<div id="parts"></div>
+<div id="editor">
+  <div style="display:flex; justify-content:space-between; align-items:center">
+    <b>✏️ โหมดจัดตำแหน่ง</b>
+    <button id="editClose" style="width:auto" title="ปิดโหมดจัดตำแหน่ง (Esc)">✖ ปิด</button>
+  </div>
+  <select id="editSel"></select>
+  <label>ขนาด <input id="editScale" type="range" min="0.1" max="3" step="0.01" value="1">
+    <input id="editScaleN" class="num" type="number" min="0.01" max="10" step="0.01" value="1"> เท่า</label>
+  <label>หมุน <input id="editRot" type="range" min="-180" max="180" step="1" value="0">
+    <input id="editRotN" class="num" type="number" min="-360" max="360" step="0.1" value="0"> °</label>
+  <div style="display:flex; gap:6px">
+    <button id="zDown">⬇ ถอยหลัง</button>
+    <button id="zUp">⬆ มาหน้า</button>
+  </div>
+  <button id="swapImgBtn">🔄 เปลี่ยนรูปชิ้นนี้</button>
+  <button id="editReset">↩ คืนค่าชิ้นนี้</button>
+  <button id="delBtn">🗑 ลบ/ซ่อนชิ้นนี้</button>
+  <button id="addImgBtn">➕ เพิ่มรูปใหม่</button>
+  <label>พรีเซ็ท <select id="presetSel"><option value="">—</option></select></label>
+  <div style="display:flex; gap:6px">
+    <button id="presetSave">💾 บันทึกพรีเซ็ท</button>
+    <button id="presetDel" style="width:auto">🗑</button>
+  </div>
+  <button id="obsLinkBtn">📋 ก็อปลิงก์สำหรับ OBS</button>
+  <button id="saveFileBtn">📁 เซฟค่าลงโฟลเดอร์ (ติดไปกับ index)</button>
+  <input id="addImgFile" type="file" accept="image/*" style="display:none">
+  <input id="swapImgFile" type="file" accept="image/*" style="display:none">
+  <small>ลากบนจอ = ย้ายชิ้นที่เลือก · ล้อเมาส์/สไลเดอร์ = ขนาด<br>
+  สีชื่อชิ้น: <span style="color:#e57373">แดง = ส่วนขยับ (ลบไม่ได้ เปลี่ยนรูปได้)</span> ·
+  <span style="color:#81c784">เขียว = ไฟล์ดั้งเดิม</span> · ดำ = ไฟล์ใหม่<br>
+  รูปใหม่/รูปแทน: ก็อปไฟล์ลงโฟลเดอร์นี้ก่อน แล้วค่อยกดเลือก<br>
+  ค่าจำในเบราว์เซอร์นี้ — กด 📁 เซฟเป็น layout.js ในโฟลเดอร์นี้
+  แล้วเปิด index จากที่ไหนก็ได้ค่าเหมือนที่ตั้งไว้ (รวมถึงชิ้นที่ซ่อน)</small>
+</div>
+<div id="hint">กด 🎤 เปิดไมค์แล้วพูด = ปากขยับตามเสียง · ขยับเมาส์ = หันหน้า+ตามอง · เอาเมาส์ชิดขอบล่างเรียกแถบเครื่องมือ</div>
+<div id="demoBadge">⚠ โหมดทดสอบ — ปาก/หัวขยับเอง ไม่ฟังเมาส์และไมค์<br>คลิกที่นี่เพื่อกลับโหมดใช้งานจริง</div>
+<div id="dot"></div>
+<div id="debug"></div>
+
+<script src="layout.js"></script><!-- ค่าที่เซฟด้วยปุ่ม 📁 — ไม่มีไฟล์ก็แค่ 404 ข้ามไป -->
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const head = $("head"), face = $("face"), hair = $("hair");
+const mouthImgs = [...document.querySelectorAll(".mouth")]; // states 1..4 (0 = ปากปิดที่วาดไว้ในหน้า)
+const params = new URLSearchParams(location.search);
+
+// ---------- cache-bust: บังคับโหลดรูปเวอร์ชันล่าสุดทุกครั้งที่เปิด (กัน OBS/เบราว์เซอร์จำรูปเก่า) ----------
+const VER = Date.now();
+document.querySelectorAll("#avatar img").forEach(im =>
+  im.src = im.getAttribute("src").split("?")[0] + "?v=" + VER);
+$("pupilw").style.webkitMaskImage = $("pupilw").style.maskImage =
+  `url("v6_eyes_white.png?v=${VER}")`;
+
+// ตาดำอาร์ตใหม่มาบนแคนวาสวาด 1476x2085 — จุดศูนย์ถ่วงเนื้อตาขาว + ถ่างข้างละ 3px (จูนด้วยตา กันเหล่)
+// สเกล 0.761 ออฟเซ็ต (-54,46) — คนละค่ากับขอบฮู้ด
+// (ถ้า bake สร้าง v6_pupils.png ขนาด 1024 กลับมา เงื่อนไขนี้จะไม่ทำงาน วางแบบเดิมตรงอยู่แล้ว)
+const pupEl = $("pupils");
+const fitPup = () => {
+  if (pupEl.naturalWidth <= 1100) return;
+  pupEl.dataset.w = 1123;
+  pupEl.style.left = "-54px"; pupEl.style.top = "46px"; pupEl.style.width = "1123px";
+  applyPart("ตาดำ"); // ให้ scale ที่ผู้ใช้ตั้งไว้ (ถ้ามี) คิดจากฐาน 1123
+};
+if (pupEl.complete && pupEl.naturalWidth) setTimeout(fitPup, 0);
+else pupEl.addEventListener("load", fitPup, { once: true });
+
+// OBS Browser Source mode (auto-detected): transparent background, no UI
+const obsMode = params.has("obs") || !!window.obsstudio;
+if (obsMode) {
+  document.documentElement.style.background = "transparent";
+  document.body.style.background = "transparent";
+  $("bar").style.display = "none";
+  $("hint").style.display = "none";
+  $("dot").style.display = "block";
+  setTimeout(() => $("dot").style.display = "none", 25000);
+}
+const debugMode = params.has("debug");
+if (debugMode) $("debug").style.display = "block";
+
+// ---------- helper link (global mic + mouse via ws://127.0.0.1:8765) ----------
+let wsData = null, wsAt = -1e9;
+(function connectWS() {
+  let ws;
+  try { ws = new WebSocket("ws://127.0.0.1:8765"); } catch (e) { setTimeout(connectWS, 3000); return; }
+  ws.onmessage = e => { wsData = JSON.parse(e.data); wsAt = performance.now(); };
+  ws.onclose = () => setTimeout(connectWS, 2000);
+  ws.onerror = () => ws.close();
+})();
+const wsFresh = now => wsData && (now - wsAt) < 1200;
+
+// ---------- scale to fit ----------
+const avatar = $("avatar");
+function fit() {
+  avatar.style.transform = `scale(${Math.min(innerWidth / 1024, innerHeight / 1536)})`;
+}
+addEventListener("resize", fit); fit();
+
+// ---------- small physics + noise helpers ----------
+class Spring {
+  constructor() { this.p = 0; this.v = 0; }
+  step(target, dt, w, z) {
+    this.v += (w * w * (target - this.p) - 2 * z * w * this.v) * dt;
+    this.p += this.v * dt;
+    return this.p;
+  }
+}
+const nz = (t, a, b, c) =>
+  Math.sin(t * a) * 0.55 + Math.sin(t * b + 1.7) * 0.3 + Math.sin(t * c + 4.1) * 0.15;
+
+// ---------- mouth crossfade (v = 0..4, 0 = baked closed mouth) ----------
+function setMouth(v) {
+  v = Math.max(0, Math.min(4, v));
+  const i = Math.floor(v), frac = v - i;
+  for (let k = 1; k <= 4; k++)
+    mouthImgs[k - 1].style.opacity = (k === i) ? 1 : (k === i + 1) ? frac : 0;
+}
+
+// ---------- blink: squash + late lid fade, randomized character ----------
+let blinkPhase = "idle", blinkStart = 0, nextBlink = performance.now() + 2000;
+let blinkDepth = 1, tClose = 90, tHold = 70, tOpen = 140;
+const easeIn = t => t * t, easeOut = t => 1 - (1 - t) * (1 - t);
+const forceBlink = parseFloat(params.get("blink"));
+function applyBlink(p) {
+  const q = Math.max(0, Math.min(1, (p - 0.3) / 0.5));
+  const s = Math.max(0.03, 1 - p);
+  const oOp = p < 0.85 ? 1 : Math.max(0, (1 - p) / 0.15);
+  $("eyesC").style.opacity = q;
+  $("eyesOpen").style.transform = `scaleY(${s})`;
+  $("eyesOpen").style.opacity = oOp;
+}
+function scheduleBlink(now) {
+  const half = Math.random() < 0.15;
+  blinkDepth = half ? 0.55 + Math.random() * 0.15 : 0.92 + Math.random() * 0.08;
+  tClose = 70 + Math.random() * 45;
+  tHold = 40 + Math.random() * 55;
+  tOpen = 115 + Math.random() * 85;
+  nextBlink = now + 2000 + Math.random() * 4800 + (Math.random() < 0.18 ? -1700 : 0);
+}
+function tickBlink(now) {
+  if (!isNaN(forceBlink)) { applyBlink(forceBlink); return; }
+  let p = 0;
+  if (blinkPhase === "idle" && now >= nextBlink) { blinkPhase = "closing"; blinkStart = now; }
+  if (blinkPhase === "closing") {
+    const t = (now - blinkStart) / tClose;
+    if (t >= 1) { blinkPhase = "hold"; blinkStart = now; p = 1; } else p = easeIn(t);
+  } else if (blinkPhase === "hold") {
+    p = 1;
+    if (now - blinkStart >= tHold) { blinkPhase = "opening"; blinkStart = now; }
+  } else if (blinkPhase === "opening") {
+    const t = (now - blinkStart) / tOpen;
+    if (t >= 1) { blinkPhase = "idle"; p = 0; scheduleBlink(now); }
+    else p = 1 - easeOut(t);
+  }
+  applyBlink(p * blinkDepth);
+}
+
+// ---------- mouse ----------
+let nx = 0, ny = 0;
+addEventListener("mousemove", e => {
+  if (editMode) return; // ระหว่างจัดตำแหน่ง หัวไม่ต้องหันตามเมาส์
+  nx = (e.clientX / innerWidth - 0.5) * 2;
+  ny = (e.clientY / innerHeight - 0.5) * 2;
+});
+
+// ---------- mic ----------
+let analyser = null, audioData = null, level = 0, smooth = 0, prevSmooth = 0, openness = 0;
+const sens = $("sens");
+sens.value = parseFloat(params.get("sens")) || localStorage.tigerSens || 8;
+sens.oninput = () => localStorage.tigerSens = sens.value;
+$("micBtn").onclick = async () => {
+  if (analyser) { analyser = null; $("micBtn").textContent = "🎤 เปิดไมค์"; $("micBtn").classList.remove("on"); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    const ctx = new AudioContext();
+    ctx.createMediaStreamSource(stream).connect(analyser = ctx.createAnalyser());
+    analyser.fftSize = 1024;
+    audioData = new Float32Array(analyser.fftSize);
+    $("micBtn").textContent = "🎤 ไมค์ทำงาน"; $("micBtn").classList.add("on");
+  } catch (err) { alert("เปิดไมค์ไม่ได้: " + err.message); }
+};
+function tickMic(now) {
+  if (wsFresh(now)) {
+    level = wsData.level * sens.value * 1.2;
+  } else if (analyser) {
+    analyser.getFloatTimeDomainData(audioData);
+    let sum = 0;
+    for (let i = 0; i < audioData.length; i++) sum += audioData[i] * audioData[i];
+    level = Math.sqrt(sum / audioData.length) * sens.value;
+  } else { level = 0; }
+  smooth = level > smooth ? smooth * 0.5 + level * 0.5 : smooth * 0.86 + level * 0.14;
+  $("meter").style.width = Math.min(100, smooth * 100) + "%";
+}
+
+// ---------- springs & state ----------
+const sRot = new Spring(), sX = new Spring(), sY = new Spring();
+const fRot = new Spring(), fX = new Spring(), fY = new Spring();
+const hX = new Spring(), hRot = new Spring();
+const sEar = new Spring();
+let flickVel = { L: 0, R: 0 }, nextFlick = performance.now() + 4000, perkAt = 0;
+let tailEls = []; // ชิ้นที่เพิ่มเองชื่อมี tail/หาง — แกว่งอัตโนมัติ (เติมรายการตอนโหลด/เพิ่มรูป)
+
+const demo = params.has("demo");
+let demoT = 0;
+if (demo) {
+  const b = $("demoBadge");
+  b.style.display = "block";
+  b.style.pointerEvents = "auto";
+  b.onclick = () => location.href = location.pathname;
+}
+
+// ---------- main loop ----------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const t = now / 1000;
+
+  if (demo) {
+    demoT += dt;
+    nx = Math.sin(demoT * 0.8) * 0.85;
+    ny = Math.sin(demoT * 0.5) * 0.5;
+    smooth = Math.max(0, Math.sin(demoT * 5.5)) * (0.4 + 0.6 * Math.abs(Math.sin(demoT * 0.7)));
+    $("meter").style.width = Math.min(100, smooth * 100) + "%";
+  } else {
+    if (!editMode && wsFresh(now)) {
+      nx = Math.max(-1, Math.min(1, ((wsData.mx - wsData.vx) / wsData.vw - 0.5) * 2));
+      ny = Math.max(-1, Math.min(1, ((wsData.my - wsData.vy) / wsData.vh - 0.5) * 2));
+    }
+    tickMic(now);
+  }
+  const linked = wsFresh(now);
+  $("wsState").textContent = linked ? "🔗 ตัวช่วย: เชื่อมต่อ ✓" : "🔗 ตัวช่วย: -";
+  $("dot").style.background = linked ? "#2e7d46" : "#c33";
+  if (debugMode) {
+    $("debug").textContent =
+      `obs: ${obsMode}  helper: ${linked ? "CONNECTED" : "NOT FOUND"}\n` +
+      `level: ${level.toFixed(3)}  smooth: ${smooth.toFixed(3)}\n` +
+      `mouse: ${nx.toFixed(2)}, ${ny.toFixed(2)}` +
+      (wsData ? `  (global ${wsData.mx},${wsData.my})` : "");
+  }
+  tickBlink(now);
+
+  // ear perk when voice starts
+  if (smooth > 0.22 && prevSmooth <= 0.22 && now > perkAt) {
+    flickVel.L += 140; flickVel.R -= 140;
+    perkAt = now + 2500;
+  }
+  prevSmooth = smooth;
+
+  // mouth: gamma curve + flutter while talking
+  const targetO = Math.pow(Math.max(0, Math.min(1, (smooth - 0.05) * 1.75)), 0.8);
+  openness += (targetO - openness) * (1 - Math.pow(targetO > openness ? 0.0001 : 0.008, dt));
+  const flutter = (Math.sin(now / 45) * Math.sin(now / 97 + 1)) * 0.07
+                  * Math.min(1, openness * 3) * Math.min(1, (1 - openness) * 3);
+  setMouth(Math.max(0, Math.min(1, openness + flutter)) * 4);
+
+  // head: mouse target + organic idle drift, spring with light overshoot
+  const rT = nx * 2.2 + nz(t, 0.23, 0.52, 0.89) * 0.45;
+  const xT = nx * 7 + nz(t, 0.19, 0.44, 0.83) * 2.2;
+  const yT = ny * 5 + nz(t, 0.28, 0.60, 1.10) * 1.6;
+  const hr = sRot.step(rT, dt, 6, 0.85);
+  const hx = sX.step(xT, dt, 6, 0.85);
+  const hy = sY.step(yT, dt, 6, 0.85);
+  const breath = Math.sin(t * 1.65) * 2.2;
+  head.style.transform =
+    `translate(${hx}px, ${hy + breath - openness * 3}px) rotate(${hr}deg)`;
+
+  // face parallax: deeper, laggier layer inside the hood
+  const fr = fRot.step(nx * 0.5, dt, 4.2, 0.8);
+  const fx = fX.step(nx * 5.5 + nz(t, 0.17, 0.41, 0.79) * 1.1, dt, 4.2, 0.8);
+  const fy = fY.step(ny * 4.2 + nz(t, 0.26, 0.55, 1.03) * 0.9, dt, 4.2, 0.8);
+  const fBreath = Math.sin(t * 1.65 + 0.7) * 1.1;
+  face.style.transform =
+    `translate(${fx}px, ${fy + fBreath - openness * 1.5}px) rotate(${fr}deg)`;
+
+  // hair: front layer, sways a touch more than the skull it sits on
+  const hhx = hX.step(nx * 2.5 + nz(t, 0.21, 0.47, 0.91) * 1.4, dt, 3.5, 0.6);
+  const hhr = hRot.step(nx * 0.6, dt, 3.5, 0.6);
+  hair.style.transform = `translate(${hhx}px, ${Math.sin(t * 1.3 + 2.1) * 1.2}px) rotate(${hhr}deg)`;
+
+  // pupils: slide inside the eye-white mask window (eyes lead, head lags)
+  const gx = Math.sign(nx) * Math.sqrt(Math.abs(nx));
+  const gy = Math.sign(ny) * Math.sqrt(Math.abs(ny));
+  $("pupils").style.transform = `translate(${gx * 10}px, ${gy * 6}px)`;
+
+  // ears: wiggly spring chasing head rotation + slow drift + flicks
+  const earT = hr * 1.4 + nz(t, 0.15, 0.37, 0.71) * 1.8;
+  const earP = sEar.step(earT, dt, 11, 0.35);
+  if (now >= nextFlick) {
+    flickVel[Math.random() < 0.5 ? "L" : "R"] += (Math.random() < 0.5 ? 1 : -1) * 220;
+    nextFlick = now + 3500 + Math.random() * 8000;
+  }
+  for (const s of ["L", "R"]) {
+    flickVel[s] *= Math.pow(0.0005, dt);
+    if (Math.abs(flickVel[s]) < 0.5) flickVel[s] = 0;
+  }
+  const wig = Math.sin(now / 90);
+  $("earL").style.transform = `rotate(${earP * 0.6 + flickVel.L * 0.02 * wig}deg)`;
+  $("earR").style.transform = `rotate(${earP * 0.6 + flickVel.R * 0.02 * wig}deg)`;
+
+  // หาง: แกว่งช้า ๆ ตลอดเวลา + สะบัดถี่ขึ้นตามเสียงพูด (transform ต่างตัวกับ rotate ที่ผู้ใช้ตั้ง เลยบวกมุมกันได้)
+  if (tailEls.length) {
+    const wag = nz(t, 0.4, 0.9, 1.7) * 6 + Math.sin(now / 140) * smooth * 10;
+    for (const el of tailEls) el.style.transform = `rotate(${wag}deg)`;
+  }
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ---------- toolbar ----------
+if (!obsMode) document.body.style.background = localStorage.tigerBg || "#222222";
+document.querySelectorAll(".sw").forEach(el => {
+  el.onclick = () => { document.body.style.background = el.dataset.bg; localStorage.tigerBg = el.dataset.bg; };
+});
+// ---------- part visibility toggles (สร้าง checkbox จากทุก element ที่มี data-part) ----------
+const partEls = {};
+document.querySelectorAll("[data-part]").forEach(el =>
+  (partEls[el.dataset.part] ??= []).push(el));
+const partCbs = {};
+function addPartCheckbox(name) {
+  const lb = document.createElement("label");
+  const cb = partCbs[name] = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = !(layout[name] || {}).h;
+  cb.onchange = () => {
+    (layout[name] ??= {}).h = cb.checked ? 0 : 1;
+    applyPart(name); saveLayout();
+  };
+  lb.append(cb, name);
+  lb.style.color = partColor(name);
+  $("parts").append(lb);
+}
+$("partsBtn").onclick = () => $("parts").classList.toggle("open");
+
+// ---------- edit mode: ย้าย/ย่อขยาย/เปลี่ยนรูปชิ้นเดิม + เพิ่มรูปใหม่ ----------
+// ponytail: layout เก็บใน localStorage ของเบราว์เซอร์นี้ — ฝั่ง OBS (คนละ storage) ใช้ลิงก์ ?layout= แทน
+const LKEY = "tigerLayout";
+// ลำดับค่า: ลิงก์ ?layout= > localStorage (เบราว์เซอร์ที่ใช้ตั้งค่า) > layout.js ในโฟลเดอร์ (เครื่อง/OBS อื่น)
+let layout = {};
+try { layout = JSON.parse(params.get("layout") || localStorage[LKEY] || "null") || window.SAVED_LAYOUT || {}; }
+catch (e) { layout = window.SAVED_LAYOUT || {}; }
+let editMode = false, editPart = null;
+
+// ประเภทชิ้น: แดง = ส่วนขยับของริก (ลบไม่ได้ เปลี่ยนรูปได้) / เขียว = ไฟล์ดั้งเดิม / ดำ = ไฟล์ที่เพิ่มเอง
+const ANIMATED = new Set(["หัว", "หน้า", "ตาหลับ", "ตาขาว", "ตาดำ", "คิ้ว+ขนตา", "ปาก", "ผม", "หูซ้าย", "หูขวา"]);
+const partColor = name => ANIMATED.has(name) ? "#c62828" : (layout[name] || {}).src ? "#000" : "#2e7d32";
+
+function applyPart(name) {
+  const c = layout[name] || {};
+  (partEls[name] || []).forEach(el => {
+    if (!el.dataset.orig) el.dataset.orig = el.src;
+    const want = new URL(c.img ? c.img + "?v=" + VER : el.dataset.orig, location.href).href;
+    if (el.src !== want && !el.src.startsWith("blob:")) el.src = want;
+    el.style.marginLeft = (c.mx || 0) + "px";
+    el.style.marginTop = (c.my || 0) + "px";
+    el.style.zIndex = c.z ?? "";
+    el.style.rotate = c.r ? c.r + "deg" : "";
+    el.style.visibility = c.h ? "hidden" : "";
+    const w = () => { // ชิ้นที่กำหนดฐานกว้างไว้ (data-w เช่น ขอบฮู้ด/ตาดำแคนวาสใหญ่) ย่อขยายจากฐานนั้น
+      const base = el.dataset.w ? parseFloat(el.dataset.w) : el.naturalWidth;
+      el.style.width = c.s && c.s !== 1 ? base * c.s + "px" : el.dataset.w ? base + "px" : "";
+    };
+    el.complete && el.naturalWidth ? w() : el.addEventListener("load", w, { once: true });
+  });
+}
+let fileHandle = null, fileTimer = 0;
+async function writeLayoutFile() {
+  const w = await fileHandle.createWritable();
+  await w.write("window.SAVED_LAYOUT = " + JSON.stringify(layout) + ";\n");
+  await w.close();
+}
+const saveLayout = () => {
+  localStorage[LKEY] = JSON.stringify(layout);
+  // เซฟไฟล์ครั้งแรกแล้ว → เซฟตามอัตโนมัติทุกครั้งที่แก้ (หน่วงกันเขียนถี่ตอนลาก)
+  if (fileHandle) {
+    clearTimeout(fileTimer);
+    fileTimer = setTimeout(() => writeLayoutFile().catch(() => fileHandle = null), 800);
+  }
+};
+$("saveFileBtn").onclick = async () => {
+  try {
+    if (!fileHandle && window.showSaveFilePicker)
+      fileHandle = await showSaveFilePicker({ suggestedName: "layout.js",
+        types: [{ description: "layout", accept: { "text/javascript": [".js"] } }] });
+    if (fileHandle) await writeLayoutFile();
+    else { // เบราว์เซอร์เก่าไม่มี picker: โหลดไฟล์แล้วให้ผู้ใช้ย้ายมาวางเอง
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob(["window.SAVED_LAYOUT = " + JSON.stringify(layout) + ";\n"]));
+      a.download = "layout.js"; a.click();
+      alert("ได้ไฟล์ layout.js แล้ว — ย้ายมาวางในโฟลเดอร์เดียวกับ index.html");
+    }
+    $("saveFileBtn").textContent = "✓ เซฟแล้ว — เปิดจากที่ไหนก็ได้ค่านี้";
+    setTimeout(() => $("saveFileBtn").textContent = "📁 เซฟค่าลงโฟลเดอร์ (ติดไปกับ index)", 3000);
+  } catch (e) { if (e.name !== "AbortError") alert("เซฟไม่สำเร็จ: " + e.message); }
+};
+
+const editSel = $("editSel");
+function addEditOption(name) {
+  const o = document.createElement("option");
+  o.value = o.textContent = name;
+  o.style.color = partColor(name);
+  editSel.append(o);
+}
+function selectPart(name) {
+  document.querySelectorAll(".editSelected").forEach(el => el.classList.remove("editSelected"));
+  editPart = name || null;
+  if (!editPart) return;
+  editSel.value = editPart;
+  editSel.style.color = partColor(editPart);
+  partEls[editPart].forEach(el => el.classList.add("editSelected"));
+  $("editScale").value = $("editScaleN").value = (layout[editPart] || {}).s || 1;
+  $("editRot").value = $("editRotN").value = (layout[editPart] || {}).r || 0;
+}
+editSel.onchange = () => selectPart(editSel.value);
+
+// เตือนถ้าไฟล์ที่อ้างไม่อยู่ในโฟลเดอร์ แล้วโชว์จากไฟล์ที่เพิ่งเลือกไปก่อน
+function fallbackToPicked(name, file) {
+  (partEls[name] || []).forEach(im => im.onerror = () => {
+    im.onerror = null;
+    if (file) im.src = URL.createObjectURL(file);
+    alert("ยังไม่พบไฟล์ในโฟลเดอร์อวตาร — แสดงชั่วคราวจากไฟล์ที่เลือก\nก็อปไฟล์ลงโฟลเดอร์ด้วย ไม่งั้นเปิดครั้งหน้ารูปหาย");
+  });
+}
+function addExtraImg(name, file) {
+  const im = document.createElement("img");
+  im.dataset.part = name;
+  (partEls[name] ??= []).push(im);
+  fallbackToPicked(name, file);
+  im.src = name + "?v=" + VER;
+  avatar.append(im);
+  if (/tail|หาง/i.test(name)) { im.style.transformOrigin = "50% 85%"; tailEls.push(im); }
+  addPartCheckbox(name);
+  addEditOption(name);
+  applyPart(name);
+}
+
+for (const name in partEls) { addPartCheckbox(name); addEditOption(name); }
+for (const name in layout) {
+  if (layout[name].src && !partEls[name]) addExtraImg(name);
+  else applyPart(name);
+}
+
+function setEditMode(on) {
+  editMode = on;
+  document.body.classList.toggle("editing", on);
+  $("editor").classList.toggle("open", on);
+  $("editBtn").classList.toggle("on", on);
+  nx = ny = 0; // หัวกลับมาตรงกลาง จะได้จัดตำแหน่งง่าย
+  if (on) selectPart(editSel.value); else selectPart(null);
+}
+$("editBtn").onclick = () => setEditMode(!editMode);
+$("editClose").onclick = () => setEditMode(false);
+addEventListener("keydown", e => { if (e.key === "Escape" && editMode) setEditMode(false); });
+
+let dragAt = null;
+addEventListener("mousedown", e => {
+  if (!editMode || !editPart || e.target.closest("#editor,#bar,#parts")) return;
+  dragAt = [e.clientX, e.clientY];
+});
+addEventListener("mouseup", () => dragAt = null);
+addEventListener("mousemove", e => {
+  if (!dragAt || !editPart) return;
+  const k = Math.min(innerWidth / 1024, innerHeight / 1536);
+  const c = layout[editPart] ??= {};
+  c.mx = (c.mx || 0) + (e.clientX - dragAt[0]) / k;
+  c.my = (c.my || 0) + (e.clientY - dragAt[1]) / k;
+  dragAt = [e.clientX, e.clientY];
+  applyPart(editPart); saveLayout();
+});
+addEventListener("wheel", e => {
+  if (!editMode || !editPart || e.target.closest("#editor,#bar,#parts")) return;
+  const c = layout[editPart] ??= {};
+  c.s = Math.max(0.1, Math.min(3, (c.s || 1) * (e.deltaY < 0 ? 1.05 : 1 / 1.05)));
+  $("editScale").value = c.s;
+  $("editScaleN").value = c.s.toFixed(2);
+  applyPart(editPart); saveLayout();
+});
+// สไลเดอร์กับช่องตัวเลขซิงก์กันสองทาง — พิมพ์เลขตรง ๆ ได้เพื่อความละเอียด
+function wirePair(rangeEl, numEl, key) {
+  const set = v => {
+    if (!editPart || isNaN(v)) return;
+    (layout[editPart] ??= {})[key] = v;
+    applyPart(editPart); saveLayout();
+  };
+  rangeEl.oninput = () => { numEl.value = rangeEl.value; set(parseFloat(rangeEl.value)); };
+  numEl.oninput = () => { rangeEl.value = numEl.value; set(parseFloat(numEl.value)); };
+}
+wirePair($("editScale"), $("editScaleN"), "s");
+wirePair($("editRot"), $("editRotN"), "r");
+const bumpZ = d => {
+  if (!editPart) return;
+  const c = layout[editPart] ??= {};
+  c.z = (c.z || 0) + d;
+  applyPart(editPart); saveLayout();
+};
+$("zUp").onclick = () => bumpZ(1);
+$("zDown").onclick = () => bumpZ(-1);
+$("editReset").onclick = () => {
+  if (!editPart) return;
+  const src = (layout[editPart] || {}).src;
+  if (src) layout[editPart] = { src }; else delete layout[editPart];
+  $("editScale").value = $("editScaleN").value = 1;
+  $("editRot").value = $("editRotN").value = 0;
+  partCbs[editPart].checked = true;
+  applyPart(editPart); saveLayout();
+};
+$("delBtn").onclick = () => {
+  if (!editPart) return;
+  const name = editPart;
+  if (ANIMATED.has(name)) {
+    alert(`"${name}" เป็นส่วนขยับของริก ลบไม่ได้\n(เปลี่ยนรูปด้วย 🔄 หรือซ่อนชั่วคราวในแผง 🧩 ได้)`);
+    return;
+  }
+  if ((layout[name] || {}).src) {
+    // รูปที่เพิ่มเอง: ลบออกจากอวตารถาวร (ตัวไฟล์ในโฟลเดอร์ไม่ถูกลบ)
+    if (!confirm(`ลบรูป "${name}" ออกจากอวตาร?`)) return;
+    tailEls = tailEls.filter(el => !partEls[name].includes(el));
+    partEls[name].forEach(el => el.remove());
+    delete partEls[name]; delete layout[name];
+    partCbs[name].parentElement.remove(); delete partCbs[name];
+    [...editSel.options].find(o => o.value === name)?.remove();
+    selectPart(editSel.value);
+  } else {
+    // ชิ้นเดิมของริก: ซ่อนแบบจำค่า (กลับมาติ๊กเปิดในแผง 🧩 ได้)
+    (layout[name] ??= {}).h = 1;
+    partCbs[name].checked = false;
+    applyPart(name);
+  }
+  saveLayout();
+};
+$("addImgBtn").onclick = () => $("addImgFile").click();
+$("addImgFile").onchange = () => {
+  const f = $("addImgFile").files[0];
+  $("addImgFile").value = "";
+  if (!f) return;
+  if (partEls[f.name]) { alert("มีชิ้น " + f.name + " อยู่แล้ว"); return; }
+  layout[f.name] = { src: f.name };
+  addExtraImg(f.name, f);
+  selectPart(f.name);
+  saveLayout();
+};
+$("swapImgBtn").onclick = () => { if (editPart) $("swapImgFile").click(); };
+$("swapImgFile").onchange = () => {
+  const f = $("swapImgFile").files[0];
+  $("swapImgFile").value = "";
+  if (!f || !editPart) return;
+  if (partEls[editPart].length > 1 &&
+      !confirm(`ชิ้น "${editPart}" มี ${partEls[editPart].length} รูป (เช่น ปาก 4 เฟรม) จะใช้รูปเดียวแทนทั้งหมดเลยไหม?`)) return;
+  partEls[editPart].forEach(el => { if (el.src.startsWith("blob:")) el.src = el.dataset.orig; });
+  const c = layout[editPart] ??= {};
+  c.img = f.name;
+  delete c.h; // ใส่รูปแล้วโชว์เลย (สำคัญกับพรีเซ็ทเปล่าที่ซ่อนทุกชิ้นไว้)
+  partCbs[editPart].checked = true;
+  fallbackToPicked(editPart, f);
+  applyPart(editPart); saveLayout();
+};
+// ---------- presets: เก็บ layout ทั้งชุดไว้หลายแบบ สลับได้ ----------
+// ponytail: สลับพรีเซ็ทด้วยการเขียนทับ layout แล้ว reload — ง่ายและสภาพหน้าตรงกับค่าเสมอ
+const PKEY = "tigerPresets";
+let presets = {};
+try { presets = JSON.parse(localStorage[PKEY] || "{}"); } catch (e) {}
+const presetSel = $("presetSel");
+function refreshPresets() {
+  presetSel.innerHTML = '<option value="">— เลือกพรีเซ็ท —</option>' +
+    '<option value="__blank__">🈳 เปล่า (ซ่อนทุกชิ้น ไว้ใส่รูปใหม่)</option>';
+  for (const n in presets) {
+    const o = document.createElement("option");
+    o.value = o.textContent = n;
+    presetSel.append(o);
+  }
+}
+refreshPresets();
+presetSel.onchange = () => {
+  const n = presetSel.value;
+  if (!n) return;
+  if (n === "__blank__") {
+    // พรีเซ็ทเปล่า: ซ่อนทุกชิ้น แต่รายชื่อ (สีแดง = ส่วนขยับ) ยังอยู่ครบ
+    // เลือกชิ้นแล้วกด 🔄 ใส่รูป — ชิ้นนั้นจะโผล่พร้อมขยับตามริกทันที
+    if (!confirm("เริ่มพรีเซ็ทเปล่า? ทุกชิ้นถูกซ่อน (หน้าจะโหลดใหม่)")) { presetSel.value = ""; return; }
+    const blank = {};
+    for (const name in partEls) blank[name] = Object.assign({}, layout[name], { h: 1 });
+    localStorage[LKEY] = JSON.stringify(blank);
+    location.reload();
+    return;
+  }
+  if (!confirm(`ใช้พรีเซ็ท "${n}"? (หน้าจะโหลดใหม่ ค่าที่ยังไม่ได้บันทึกเป็นพรีเซ็ทจะถูกแทนที่)`)) {
+    presetSel.value = ""; return;
+  }
+  localStorage[LKEY] = JSON.stringify(presets[n]);
+  location.reload();
+};
+$("presetSave").onclick = () => {
+  const n = prompt("ตั้งชื่อพรีเซ็ท:", presetSel.value || "");
+  if (!n) return;
+  presets[n] = JSON.parse(JSON.stringify(layout));
+  localStorage[PKEY] = JSON.stringify(presets);
+  refreshPresets();
+  presetSel.value = n;
+};
+$("presetDel").onclick = () => {
+  const n = presetSel.value;
+  if (!n) { alert("เลือกพรีเซ็ทที่จะลบก่อน"); return; }
+  if (!confirm(`ลบพรีเซ็ท "${n}"?`)) return;
+  delete presets[n];
+  localStorage[PKEY] = JSON.stringify(presets);
+  refreshPresets();
+};
+
+$("obsLinkBtn").onclick = async () => {
+  const u = location.origin + location.pathname + "?obs&layout=" + encodeURIComponent(JSON.stringify(layout));
+  try { await navigator.clipboard.writeText(u); $("obsLinkBtn").textContent = "✓ ก็อปแล้ว — วางใน OBS Browser Source"; }
+  catch (e) { prompt("ก็อปลิงก์นี้ไปใส่ OBS:", u); }
+  setTimeout(() => $("obsLinkBtn").textContent = "📋 ก็อปลิงก์สำหรับ OBS", 3000);
+};
+
+let barTimer = 0;
+function pokeBar() {
+  $("bar").classList.remove("hidden");
+  clearTimeout(barTimer);
+  barTimer = setTimeout(() => $("bar").classList.add("hidden"), 3500);
+}
+addEventListener("mousemove", e => { if (e.clientY > innerHeight - 120) pokeBar(); });
+pokeBar();
+setTimeout(() => $("hint").style.opacity = 0, 9000);
+</script>
+</body>
+</html>

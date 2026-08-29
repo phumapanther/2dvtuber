@@ -1,0 +1,1555 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>Rig Studio — PhumaPanther</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #222; }
+  #stage { position: absolute; inset: 0; display: flex; justify-content: center; align-items: flex-end; }
+  #avatar { position: relative; width: 1024px; height: 1536px; transform-origin: 50% 100%; }
+  #avatar img { position: absolute; pointer-events: none; user-select: none; }
+  .full { left: 0; top: 0; width: 1024px; height: 1536px; }
+  .grp { position: absolute; left: 0; top: 0; width: 1024px; height: 1536px; will-change: transform; }
+  .pupilw { -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+  .leaf { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
+
+  #bar { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
+         display: flex; gap: 10px; align-items: center; padding: 8px 14px;
+         background: rgba(20,20,20,.82); border-radius: 12px; font: 14px system-ui, sans-serif;
+         color: #eee; transition: opacity .4s; z-index: 10; }
+  #bar.hidden { opacity: 0; pointer-events: none; }
+  #bar button, #bar select { border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer;
+                background: #444; color: #eee; font: inherit; }
+  #bar button.on { background: #2e7d46; }
+  .sw { width: 22px; height: 22px; border-radius: 6px; border: 2px solid #666; cursor: pointer; }
+  #meterWrap { width: 90px; height: 8px; background: #333; border-radius: 4px; overflow: hidden; }
+  #meter { height: 100%; width: 0%; background: #4caf7d; }
+  #sens { width: 110px; }
+  #hint { position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+          color: #bbb; font: 13px system-ui, sans-serif; background: rgba(20,20,20,.6);
+          padding: 6px 12px; border-radius: 8px; transition: opacity 1s; z-index: 10; }
+  #demoBadge { position: fixed; top: 12px; right: 12px; z-index: 20; display: none;
+               background: #c62828; color: #fff; font: bold 15px system-ui, sans-serif;
+               padding: 10px 14px; border-radius: 10px; cursor: pointer; }
+  #dot { position: fixed; left: 10px; bottom: 10px; width: 14px; height: 14px;
+         border-radius: 50%; background: #c33; z-index: 30; display: none; }
+  #debug { position: fixed; top: 10px; left: 10px; color: #6f6; font: 13px monospace;
+           background: rgba(0,0,0,.75); padding: 8px 12px; border-radius: 8px;
+           z-index: 30; white-space: pre; display: none; }
+  #emotes { position: fixed; left: 50%; transform: translateX(-50%); bottom: 60px; display: none;
+            grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 10px 12px;
+            background: rgba(20,20,20,.9); border-radius: 12px; z-index: 20;
+            font: 14px system-ui, sans-serif; }
+  #emotes.open { display: grid; }
+  #emotes button { border: 0; border-radius: 8px; padding: 7px 10px; cursor: pointer;
+                   background: #444; color: #eee; font: inherit; text-align: left; white-space: nowrap; }
+  #emotes button:hover { background: #2e7d46; }
+  #parts { position: fixed; right: 12px; bottom: 60px; display: none; flex-direction: column;
+           gap: 6px; padding: 10px 14px; background: rgba(245,245,245,.95); border-radius: 12px;
+           font: 14px system-ui, sans-serif; color: #111; z-index: 20; max-height: 70vh; overflow-y: auto; }
+  #menu { position: fixed; right: 12px; bottom: 60px; display: none; flex-direction: column;
+          gap: 6px; padding: 12px 14px; background: rgba(20,20,20,.92); border-radius: 12px;
+          font: 14px system-ui, sans-serif; color: #eee; z-index: 25; width: 260px;
+          max-height: 85vh; overflow-y: auto; }
+  #menu.open { display: flex; }
+  #menu button { border: 0; border-radius: 8px; padding: 7px 10px; cursor: pointer;
+                 background: #444; color: #eee; font: inherit; text-align: left; }
+  #menu button.on { background: #2e7d46; }
+  #menu .sec { margin-top: 6px; color: #8fd6a8; font-size: 13px; }
+  #menu label { display: flex; gap: 6px; align-items: center; }
+  #menu input[type=range] { flex: 1; }
+  #menu small { color: #999; line-height: 1.5; }
+  /* แจ้งเตือนโดเนท + คอนเฟตติ */
+  #donateBox { position: fixed; top: -140px; left: 50%; transform: translateX(-50%);
+               background: linear-gradient(135deg, #ff8a00, #ff2070); color: #fff;
+               padding: 14px 28px; border-radius: 16px; font: bold 20px system-ui, sans-serif;
+               text-align: center; z-index: 40; box-shadow: 0 6px 24px rgba(0,0,0,.4);
+               transition: top .45s cubic-bezier(.2, 1.4, .4, 1); max-width: 70vw; }
+  #donateBox.show { top: 18px; }
+  #donateBox small { display: block; font-weight: normal; font-size: 15px; margin-top: 3px; }
+  .confetti { position: fixed; top: -14px; width: 9px; height: 14px; z-index: 39;
+              pointer-events: none; animation: cfall linear forwards; }
+  @keyframes cfall { to { transform: translateY(105vh) rotate(720deg); } }
+  #parts.open { display: flex; }
+  #parts label { cursor: pointer; user-select: none; display: flex; gap: 6px; align-items: center; }
+  #editor { position: fixed; left: 12px; bottom: 60px; display: none; flex-direction: column;
+            gap: 8px; padding: 12px 14px; background: rgba(20,20,20,.9); border-radius: 12px;
+            font: 14px system-ui, sans-serif; color: #eee; z-index: 20; max-width: 265px;
+            max-height: 85vh; overflow-y: auto; }
+  #editor.open { display: flex; }
+  #editor select, #editor button, #editor input[type=range] { font: inherit; width: 100%; }
+  #editor select { background: #f5f5f5; color: #111; border-radius: 6px; padding: 3px 6px; }
+  #editor label { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+  #editor .num { width: 64px; font: inherit; background: #333; color: #eee;
+                 border: 1px solid #555; border-radius: 6px; padding: 2px 6px; }
+  #editor button { border: 0; border-radius: 8px; padding: 6px 10px; cursor: pointer; background: #444; color: #eee; }
+  #editor small { color: #999; line-height: 1.5; }
+  .editSelected { outline: 3px dashed #f5a623; outline-offset: -3px; }
+  /* Zzz ตอนหลับ — ตัวอักษรลอยขึ้น ไม่ต้องมีไฟล์รูป */
+  #zzz { position: absolute; left: 66%; top: 14%; width: 200px; height: 160px;
+         font: bold 60px system-ui, sans-serif; color: #9fb7d8; opacity: 0; pointer-events: none;
+         text-shadow: 0 2px 8px rgba(0,0,0,.25); }
+  #zzz span { position: absolute; bottom: 0; animation: zfloat 2.4s linear infinite; }
+  #zzz span:nth-child(2) { animation-delay: .8s; font-size: 44px; left: 34px; }
+  #zzz span:nth-child(3) { animation-delay: 1.6s; font-size: 30px; left: 62px; }
+  @keyframes zfloat {
+    0% { transform: translateY(0) rotate(8deg); opacity: 0; }
+    20% { opacity: .9; }
+    100% { transform: translateY(-110px) rotate(-10deg); opacity: 0; }
+  }
+  /* ระหว่างจัดตำแหน่ง ปิด mask ตาชั่วคราว — เห็นตาดำที่หลุดนอกกรอบแล้วลากกลับได้ */
+  body.editing .pupilw { -webkit-mask-image: none !important; mask-image: none !important; }
+</style>
+</head>
+<body>
+<div id="stage"><div id="avatar"></div></div>
+
+<!-- แถบล่าง: เหลือแค่ของที่ใช้บ่อย — ที่เหลืออยู่ใน ☰ เมนู (จัดหมวดหมู่ อ่านง่ายสำหรับมือใหม่) -->
+<div id="bar">
+  <select id="avatarSel" title="เลือกอวตาร"></select>
+  <span id="wsState" title="สถานะตัวช่วย OBS (เปิดตัวช่วยOBS.bat)" style="color:#888">🔗–</span>
+  <button id="micBtn">🎤 เปิดไมค์</button>
+  <div id="meterWrap" title="ระดับเสียงไมค์"><div id="meter"></div></div>
+  <button id="emoteBtn" title="อีโมต (หรือกดเลข 1-9 / Ctrl+Alt+เลข ทั้งเครื่อง)">🎭 อีโมต</button>
+  <button id="menuBtn">☰ เมนู</button>
+</div>
+<div id="emotes"></div>
+<div id="menu">
+  <div style="display:flex; justify-content:space-between; align-items:center">
+    <b>⚙️ เมนูหลัก</b>
+    <button id="menuClose" style="width:auto">✖</button>
+  </div>
+  <label>ความไวไมค์ <input id="sens" type="range" min="1" max="20" step="0.5"></label>
+  <label>ความแรงอีโมต <input id="emoK" type="range" min="0.3" max="1.6" step="0.05"></label>
+  <label title="ซ้าย = สุขุมนิ่ง ๆ · ขวา = ซนดุ๊กดิ๊ก">ความขี้เล่น <input id="liveK" type="range" min="0.2" max="1.5" step="0.05"></label>
+  <div style="display:flex; gap:6px; align-items:center"><span>พื้นหลัง:</span>
+    <div class="sw" data-bg="#00b140" style="background:#00b140" title="เขียว (สำหรับ chroma key)"></div>
+    <div class="sw" data-bg="#0047bb" style="background:#0047bb"></div>
+    <div class="sw" data-bg="#222222" style="background:#222"></div>
+    <div class="sw" data-bg="#ffffff" style="background:#fff"></div>
+  </div>
+  <b class="sec">🧬 อวตาร</b>
+  <button id="newAvatarBtn" title="โคลนโครงจากตัวเดิม (ก็อปรูปให้ครบ) หรือเริ่มเปล่า">➕ สร้างอวตารใหม่</button>
+  <b class="sec">📸 กล้อง</b>
+  <button id="faceBtn" title="กดตอนนั่งหน้าตรง — เฟรมแรกคือท่ากลาง">🙂 จับหน้าจริง (หัน/อ้าปาก/กะพริบ)</button>
+  <button id="camBtn">📷 จับความเคลื่อนไหวหน้ากล้อง</button>
+  <b class="sec">✨ ลูกเล่นอัตโนมัติ</b>
+  <button id="beatBtn">🎵 โยกตามจังหวะเพลง</button>
+  <button id="sleepBtn">😴 หลับเองเมื่อเงียบนาน</button>
+  <button id="soundBtn">🔊 เสียงประกอบอีโมต/โดเนท</button>
+  <b class="sec">🎬 อัดคลิป</b>
+  <button id="recBtn" title="เลือกแชร์ 'แท็บ/หน้าต่างนี้' แล้วไฟล์ .webm จะโหลดให้เมื่อกดหยุด">🎬 อัดวิดีโอ (WebM)</button>
+  <button id="gifBtn" title="จับภาพ 4 วินาทีเป็นไฟล์ GIF">🖼 GIF 4 วินาที</button>
+  <b class="sec">🎁 แจ้งเตือนโดเนท</b>
+  <button id="donateTestBtn">🎁 ทดสอบแจ้งเตือน</button>
+  <b class="sec">📺 OBS / เซฟค่า</b>
+  <button id="obsLinkBtn">📋 ก็อปลิงก์สำหรับ OBS</button>
+  <button id="saveFileBtn">📁 เซฟค่าลงโฟลเดอร์อวตาร</button>
+  <b class="sec">🛠 ขั้นสูง</b>
+  <button id="partsBtn">🧩 เปิด/ปิดชิ้นส่วน</button>
+  <button id="editBtn">✏️ จัดตำแหน่ง / แต่งอวตาร</button>
+  <small>เสียงอีโมต: วางไฟล์ .mp3 ในโฟลเดอร์ sounds/ (ชื่อ emote_1.mp3 … emote_9.mp3, donate.mp3)<br>
+  รูปอีโมต: วาง emote_1.png … emote_9.png ในโฟลเดอร์อวตารตัวนั้น (แคนวาส 1024x1536)<br>
+  สั่งจากโปรแกรมอื่น: http://127.0.0.1:8766/emote?n=3 (ต้องเปิดตัวช่วย OBS)</small>
+</div>
+<div id="donateBox">🎁 <span id="dnName"></span> <span id="dnAmt"></span><small id="dnMsg"></small></div>
+<div id="parts"></div>
+<div id="editor">
+  <div style="display:flex; justify-content:space-between; align-items:center">
+    <b>✏️ โหมดจัดตำแหน่ง</b>
+    <button id="editClose" style="width:auto" title="ปิดโหมดจัดตำแหน่ง (Esc)">✖ ปิด</button>
+  </div>
+  <select id="editSel"></select>
+  <label>ขนาด <input id="editScale" type="range" min="0.1" max="3" step="0.01" value="1">
+    <input id="editScaleN" class="num" type="number" min="0.01" max="10" step="0.01" value="1"> เท่า</label>
+  <label>หมุน <input id="editRot" type="range" min="-180" max="180" step="1" value="0">
+    <input id="editRotN" class="num" type="number" min="-360" max="360" step="0.1" value="0"> °</label>
+  <label>ขยับ <select id="motionSel"></select></label>
+  <label>แรง <input id="motionK" type="range" min="0" max="3" step="0.05" value="1">
+    <input id="motionKN" class="num" type="number" min="0" max="10" step="0.05" value="1"> เท่า</label>
+  <div style="display:flex; gap:6px">
+    <button id="zDown">⬇ ถอยหลัง</button>
+    <button id="zUp">⬆ มาหน้า</button>
+  </div>
+  <button id="swapImgBtn">🔄 เปลี่ยนรูปชิ้นนี้</button>
+  <button id="editReset">↩ คืนค่าชิ้นนี้</button>
+  <button id="delBtn">🗑 ลบ/ซ่อนชิ้นนี้</button>
+  <button id="addImgBtn">➕ เพิ่มรูปใหม่</button>
+  <label>พรีเซ็ท <select id="presetSel"><option value="">—</option></select></label>
+  <div style="display:flex; gap:6px">
+    <button id="presetSave">💾 บันทึกพรีเซ็ท</button>
+    <button id="presetDel" style="width:auto">🗑</button>
+  </div>
+  <input id="addImgFile" type="file" accept="image/*" style="display:none">
+  <input id="swapImgFile" type="file" accept="image/*" style="display:none">
+  <small id="editHint">ลากบนจอ = ย้ายชิ้นที่เลือก · ล้อเมาส์ = ขนาด<br>
+  สีชื่อชิ้น: <span style="color:#e57373">แดง = ส่วนขยับของริก</span> ·
+  <span style="color:#81c784">เขียว = ชิ้นเดิม</span> · ดำ = รูปที่เพิ่มเอง<br>
+  รูปใหม่/รูปแทน: ก็อปไฟล์ลงโฟลเดอร์อวตารนี้ก่อน แล้วค่อยกดเลือก<br>
+  กด 📁 เซฟเป็น layout.js ในโฟลเดอร์อวตาร → เปิดจากที่ไหนก็ได้ค่านี้</small>
+</div>
+<div id="hint">🎤 พูด = ปากขยับ · เมาส์ = หันมอง · 🎭 หรือกดเลข 1-9 = อีโมต ·
+เมาส์ชิดขอบล่าง = แถบเครื่องมือ · ของเล่นทั้งหมด (กล้อง/เพลง/อัดคลิป/โดเนท) อยู่ใน ☰ เมนู</div>
+<div id="demoBadge">⚠ โหมดทดสอบ — ปาก/หัวขยับเอง ไม่ฟังเมาส์และไมค์<br>คลิกที่นี่เพื่อกลับโหมดใช้งานจริง</div>
+<div id="dot"></div>
+<div id="debug"></div>
+
+<script src="avatars.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const VER = Date.now(); // cache-bust: บังคับโหลดรูปล่าสุดทุกครั้ง (กัน OBS จำรูปเก่า)
+
+// ---------- เลือกอวตาร: ?avatar= > ตัวล่าสุดที่จำไว้ > ตัวแรกในรายชื่อ ----------
+const AVATARS = window.AVATARS || [{ id: "car1", name: "car1" }];
+let AV = params.get("avatar") || localStorage.studioAvatar || AVATARS[0].id;
+if (!AVATARS.some(a => a.id === AV)) AV = AVATARS[0].id;
+localStorage.studioAvatar = AV;
+const DIR = "avatars/" + AV + "/";
+for (const a of AVATARS) {
+  const o = document.createElement("option");
+  o.value = a.id; o.textContent = a.name;
+  $("avatarSel").append(o);
+}
+{
+  const o = document.createElement("option");
+  o.value = "__new__"; o.textContent = "➕ เพิ่มอวตารใหม่…";
+  $("avatarSel").append(o);
+}
+$("avatarSel").value = AV;
+$("avatarSel").onchange = () => {
+  if ($("avatarSel").value === "__new__") {
+    $("avatarSel").value = AV;
+    newAvatarWizard();
+    return;
+  }
+  localStorage.studioAvatar = $("avatarSel").value;
+  location.search = "?avatar=" + $("avatarSel").value; // reload — สภาพหน้าตรงกับอวตารใหม่เสมอ
+};
+
+// ---------- วิซาร์ดสร้างอวตารใหม่: เขียนโฟลเดอร์+ไฟล์ให้เองผ่าน File System Access ----------
+// โคลนโครงจากตัวเดิม = ก็อป avatar.js + รูปทุกไฟล์ที่โครงอ้างถึง → เปิดตัวใหม่แล้วใช้
+// พรีเซ็ท 🈳 เปล่า + 🔄 เปลี่ยนรูปทีละชิ้น เพื่อแทนที่ด้วยอาร์ตของตัวเอง
+async function newAvatarWizard() {
+  if (!window.showDirectoryPicker) { alert("เบราว์เซอร์นี้ไม่รองรับ — ใช้ Chrome หรือ Edge"); return; }
+  try {
+    const id = prompt("ตั้งชื่อโฟลเดอร์อวตารใหม่ (อังกฤษ a-z, 0-9):", "");
+    if (!id) return;
+    if (!/^[a-z0-9_-]+$/i.test(id)) { alert("ชื่อโฟลเดอร์ใช้ได้แค่ a-z 0-9 _ -"); return; }
+    if (AVATARS.some(a => a.id === id)) { alert("มีอวตารชื่อนี้อยู่แล้ว"); return; }
+    const disp = prompt("ชื่อที่โชว์ในเมนู:", id) || id;
+    const tpl = (prompt(
+      "เริ่มจากโครงของตัวไหน? พิมพ์ id: " + AVATARS.map(a => a.id).join(", ") +
+      "\n(เว้นว่าง = เริ่มเปล่า ไม่มีชิ้นส่วน แล้วไปกด ➕ เพิ่มรูปใหม่ ในโหมด ✏️ เอง)", AV) || "").trim();
+    alert("ขั้นสุดท้าย: เลือกโฟลเดอร์ rig_studio (โฟลเดอร์ที่มี index.html ตัวนี้)");
+    const root = await showDirectoryPicker({ mode: "readwrite" });
+    try { await root.getFileHandle("avatars.js"); }
+    catch (e) { alert("โฟลเดอร์ที่เลือกไม่ใช่ rig_studio (ไม่เจอไฟล์ avatars.js) — กดปุ่มแล้วลองใหม่"); return; }
+    const avDir = await root.getDirectoryHandle("avatars", { create: true });
+    const dir = await avDir.getDirectoryHandle(id, { create: true });
+    const writeFile = async (h, name, data) => {
+      const f = await h.getFileHandle(name, { create: true });
+      const w2 = await f.createWritable();
+      await w2.write(data);
+      await w2.close();
+    };
+    let copied = 0;
+    if (tpl && AVATARS.some(a => a.id === tpl)) {
+      const txt = await (await fetch("avatars/" + tpl + "/avatar.js?v=" + VER)).text();
+      await writeFile(dir, "avatar.js", txt);
+      // ก็อปรูปทุกไฟล์ที่โครงอ้างถึง — ตัวใหม่เปิดติดทันที ค่อยเอารูปตัวเองมาแทนทีละชิ้น
+      const names = [...new Set(txt.match(/"[^"]+\.png"/g) || [])].map(s => s.slice(1, -1));
+      for (const nm of names) {
+        try {
+          const bl = await (await fetch("avatars/" + tpl + "/" + nm + "?v=" + VER)).blob();
+          await writeFile(dir, nm, bl);
+          copied++;
+        } catch (e) {}
+      }
+      if (!copied) { alert("ก็อปรูปไม่ได้ — ต้องเปิดผ่าน เปิดอวตาร.bat (เซิร์ฟเวอร์) ถึงจะโคลนได้"); return; }
+    } else {
+      await writeFile(dir, "avatar.js",
+        '// อวตารเปล่า — เข้าโหมด ✏️ กด ➕ เพิ่มรูปใหม่ แล้วเลือกรูปแบบ "ขยับ" ให้แต่ละชิ้น\n' +
+        "window.AVATAR_DEF = { name: " + JSON.stringify(disp) + ", layers: [] };\n");
+    }
+    const list = AVATARS.concat([{ id, name: disp }]);
+    await writeFile(root, "avatars.js",
+      "// รายชื่ออวตารทั้งหมด — เพิ่มอวตารใหม่: กดปุ่ม ➕ ในเมนู หรือสร้างโฟลเดอร์เอง + เพิ่มบรรทัดตรงนี้\n" +
+      "window.AVATARS = [\n" +
+      list.map(a => `  { id: ${JSON.stringify(a.id)}, name: ${JSON.stringify(a.name)} },`).join("\n") +
+      "\n];\n");
+    localStorage.studioAvatar = id;
+    alert("สร้าง \"" + disp + "\" เรียบร้อย" + (copied ? ` (ก็อปรูป ${copied} ไฟล์)` : "") + " — กำลังเปิด…");
+    location.search = "?avatar=" + id;
+  } catch (e) {
+    if (e.name !== "AbortError") alert("สร้างไม่สำเร็จ: " + e.message);
+  }
+}
+document.getElementById("newAvatarBtn").onclick = newAvatarWizard;
+
+// โหลดคอนฟิกอวตาร + ค่าที่เซฟไว้ในโฟลเดอร์ (layout.js ไม่มีก็แค่ 404 ข้ามไป)
+function loadScript(src) {
+  return new Promise(res => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = s.onerror = res;
+    document.head.append(s);
+  });
+}
+Promise.all([
+  loadScript(DIR + "avatar.js?v=" + VER),
+  loadScript(DIR + "layout.js?v=" + VER),
+]).then(boot);
+
+function boot() {
+const def = window.AVATAR_DEF;
+if (!def) { alert("ไม่พบ " + DIR + "avatar.js — เช็คชื่อโฟลเดอร์ใน avatars.js"); return; }
+document.title = def.name + " — Rig Studio";
+
+const LKEY = "studio_" + AV + "_layout", PKEY = "studio_" + AV + "_presets";
+// ลำดับค่า: ลิงก์ ?layout= > localStorage (เบราว์เซอร์ที่ตั้งค่า) > layout.js ในโฟลเดอร์ (เครื่อง/OBS อื่น)
+let layout = {};
+try { layout = JSON.parse(params.get("layout") || localStorage[LKEY] || "null") || window.SAVED_LAYOUT || {}; }
+catch (e) { layout = window.SAVED_LAYOUT || {}; }
+
+// ---------- รูปแบบการขยับที่เลือกได้ต่อชิ้น ----------
+const MOTIONS = {
+  none: "🚫 นิ่ง",
+  head: "🖱 หันตามเมาส์ (แบบหัว)",
+  face: "👀 พารัลแลกซ์ตามเมาส์ (แบบหน้า)",
+  sway: "🍃 พลิ้วช้า (แบบผม)",
+  wiggle: "🐰 ดุ๊กดิ๊ก (แบบหู)",
+  pendulum: "🐈 แกว่งไปมา (แบบหาง)",
+  bob: "🫧 เด้งขึ้นลง",
+  float: "🎈 ลอยวน",
+  blush: "😊 โชว์ตอนพูด (แบบแก้มแดง)",
+};
+const MOTION_ORIGIN = { pendulum: "50% 88%", wiggle: "50% 20%" }; // จุดหมุนเริ่มต้นเมื่อผู้ใช้จับ motion ใส่ชิ้นเอง
+
+// ---------- สร้าง DOM จากคอนฟิก ----------
+const avatar = $("avatar");
+const partEls = {}, elDefault = new Map(), groupDefs = [];
+const CONFIG_PARTS = new Set(), CONFIG_ANIMATED = new Set();
+const E = {}; // ref ชิ้นพิเศษ: eyesOpen, eyesC, pupils, mouth*, leaves
+
+function buildMouth(parent) {
+  const m = def.mouth;
+  E.faceParent = parent; // กลุ่มหน้า — รูปอีโมต (emote_N.png) จะถูกวางทับตรงนี้
+  if (!m) return;
+  CONFIG_PARTS.add("ปาก"); CONFIG_ANIMATED.add("ปาก");
+  const mk = f => {
+    const el = document.createElement("img");
+    el.dataset.part = "ปาก";
+    el.src = DIR + f + "?v=" + VER;
+    if (m.type !== "grid" && m.posLT) { el.style.left = m.posLT[0] + "px"; el.style.top = m.posLT[1] + "px"; }
+    else el.classList.add("full");
+    (partEls["ปาก"] ??= []).push(el);
+    elDefault.set(el, {});
+    parent.append(el);
+    return el;
+  };
+  if (m.type === "grid") {
+    E.mouthGrid = m.files.map(row => row.map(mk));
+    E.mouthGrid.forEach(r => r.forEach(el => el.style.opacity = 0));
+  } else {
+    if (m.closed) E.mouth0 = mk(m.closed);
+    E.mouthFrames = m.frames.map(mk);
+    E.mouthFrames.forEach(el => el.style.opacity = 0);
+  }
+}
+
+function build(nodes, parent) {
+  for (const nd of nodes) {
+    if (nd.special === "mouth") { buildMouth(parent); continue; }
+    if (nd.special === "leaves") {
+      const dv = document.createElement("div");
+      dv.className = "grp"; E.leaves = dv; parent.append(dv); continue;
+    }
+    if (nd.children) {
+      const dv = document.createElement("div");
+      dv.className = "grp";
+      if (nd.origin) dv.style.transformOrigin = nd.origin[0] + "px " + nd.origin[1] + "px";
+      if (nd.id === "eyesOpen") E.eyesOpen = dv;
+      if (nd.motion && nd.motion !== "none") groupDefs.push({ el: dv, m: nd.motion, k: nd.k || 1 });
+      parent.append(dv);
+      build(nd.children, dv);
+      continue;
+    }
+    const el = document.createElement("img");
+    el.dataset.part = nd.part;
+    if (nd.pos) { el.style.left = nd.pos[0] + "px"; el.style.top = nd.pos[1] + "px"; }
+    else el.classList.add("full");
+    if (nd.w) { el.style.width = nd.w + "px"; el.dataset.w = nd.w; } // จำฐานกว้างไว้ให้สไลเดอร์ขนาดคิดจากค่านี้
+    if (nd.origin) el.style.transformOrigin = nd.origin[0] + "px " + nd.origin[1] + "px";
+    el.src = DIR + nd.src + "?v=" + VER;
+    elDefault.set(el, { m: nd.motion, k: nd.k, hasOrigin: !!nd.origin });
+    CONFIG_PARTS.add(nd.part);
+    if (nd.motion || nd.special) CONFIG_ANIMATED.add(nd.part);
+    (partEls[nd.part] ??= []).push(el);
+    let mount = el;
+    if (nd.special === "eyesC") { el.style.opacity = 0; E.eyesC = el; }
+    if (nd.special === "pupils") {
+      E.pupils = el; // ขนาดตามคอนฟิก (pos/w) หรือ .full — ห้ามบังคับเต็มแคนวาส: อาร์ตตาดำบางตัวมาบนแคนวาสใหญ่กว่า
+      const w = document.createElement("div");
+      w.className = "grp pupilw";
+      if (def.pupils) w.style.webkitMaskImage = w.style.maskImage = `url("${DIR + def.pupils.mask}?v=${VER}")`;
+      w.append(el); mount = w;
+    }
+    parent.append(mount);
+  }
+}
+// wrap ชั้นใน: รับ transform ของอีโมต (เด้ง/หมุน/สั่น) โดยไม่ชนกับ scale ของ fit()
+const wrap = document.createElement("div");
+wrap.className = "grp";
+wrap.id = "emoteWrap";
+avatar.append(wrap);
+build(def.layers || [], wrap);
+const zzz = document.createElement("div");
+zzz.id = "zzz";
+zzz.innerHTML = "<span>Z</span><span>z</span><span>z</span>";
+avatar.append(zzz);
+
+// OBS Browser Source mode (auto-detected): พื้นโปร่งใส ไม่มี UI
+const obsMode = params.has("obs") || !!window.obsstudio;
+if (obsMode) {
+  document.documentElement.style.background = "transparent";
+  document.body.style.background = "transparent";
+  $("bar").style.display = "none";
+  $("hint").style.display = "none";
+  $("dot").style.display = "block";
+  setTimeout(() => $("dot").style.display = "none", 25000);
+}
+const debugMode = params.has("debug");
+if (debugMode) $("debug").style.display = "block";
+
+// ---------- helper link (ไมค์+เมาส์ทั้งเครื่อง ผ่าน ws://127.0.0.1:8765) ----------
+let wsData = null, wsAt = -1e9;
+(function connectWS() {
+  let ws;
+  try { ws = new WebSocket("ws://127.0.0.1:8765"); } catch (e) { setTimeout(connectWS, 3000); return; }
+  ws.onmessage = e => {
+    const d = JSON.parse(e.data);
+    wsData = d; wsAt = performance.now();
+    if (d.emote) emote(d.emote);          // Ctrl+Alt+1..9 จากทั้งเครื่อง
+    if (d.keys) typedPulse += d.keys;      // จังหวะพิมพ์ทั้งเครื่อง
+    if (d.mb && !wsMb) clickFlick();       // คลิกเมาส์ = หูสะบัด
+    wsMb = !!d.mb;
+    if (d.donate) showDonate(d.donate);    // จากสะพาน HTTP 8766 (Streamer.bot / Stream Deck)
+  };
+  ws.onclose = () => setTimeout(connectWS, 2000);
+  ws.onerror = () => ws.close();
+})();
+const wsFresh = now => wsData && (now - wsAt) < 1200;
+
+// ---------- scale to fit ----------
+function fit() {
+  avatar.style.transform = `scale(${Math.min(innerWidth / 1024, innerHeight / 1536)})`;
+}
+addEventListener("resize", fit); fit();
+
+// ---------- ฟิสิกส์เล็ก ๆ ----------
+class Spring {
+  constructor() { this.p = 0; this.v = 0; }
+  step(target, dt, w, z) {
+    this.v += (w * w * (target - this.p) - 2 * z * w * this.v) * dt;
+    this.p += this.v * dt;
+    return this.p;
+  }
+}
+const nz = (t, a, b, c) =>
+  Math.sin(t * a) * 0.55 + Math.sin(t * b + 1.7) * 0.3 + Math.sin(t * c + 4.1) * 0.15;
+
+// ---------- ปาก (รองรับ 2 ระบบ: เฟรมเรียง N ภาพ / 3 ระดับเสียง x 3 สระ) ----------
+let vowel = 0, nextVowel = 0;
+function setMouth01(o, now) {
+  o = Math.max(0, Math.min(1, o));
+  if (E.mouthGrid) {
+    const v = o * 3;
+    if (v > 0.35 && now >= nextVowel) {
+      vowel = (vowel + 1 + Math.floor(Math.random() * 2)) % 3;
+      nextVowel = now + 130 + Math.random() * 170;
+    }
+    const i = Math.floor(v), frac = v - i;
+    for (let l = 1; l <= 3; l++)
+      for (let k = 0; k < 3; k++)
+        E.mouthGrid[l - 1][k].style.opacity =
+          (k !== vowel) ? 0 : (l === i) ? 1 : (l === i + 1) ? frac : 0;
+  } else if (E.mouthFrames) {
+    const N = E.mouthFrames.length, v = o * N;
+    const i = Math.floor(v), frac = v - i;
+    for (let k = 1; k <= N; k++)
+      E.mouthFrames[k - 1].style.opacity = (k === i) ? 1 : (k === i + 1) ? frac : 0;
+    if (E.mouth0) E.mouth0.style.opacity = Math.max(0, 1 - v * 2);
+  }
+}
+
+// ---------- กะพริบ (2 สไตล์: squash แบบเสือฮู้ด / swap แบบอนิเมะ) ----------
+let blinkPhase = "idle", blinkStart = 0, nextBlink = performance.now() + 2000;
+let blinkDepth = 1, tClose = 90, tHold = 70, tOpen = 140;
+const easeIn = t => t * t, easeOut = t => 1 - (1 - t) * (1 - t);
+const forceBlink = parseFloat(params.get("blink"));
+function applyBlink(p) {
+  if (!E.eyesOpen) return;
+  if ((def.blink || {}).style === "squash") {
+    const q = Math.max(0, Math.min(1, (p - 0.3) / 0.5));
+    const s = Math.max(0.03, 1 - p);
+    if (E.eyesC) E.eyesC.style.opacity = q;
+    E.eyesOpen.style.transform = `scaleY(${s * eyeWide})`; // eyeWide = ตาเบิกโพลงตอนตกใจ
+    E.eyesOpen.style.opacity = p < 0.85 ? 1 : Math.max(0, (1 - p) / 0.15);
+  } else {
+    const q = p >= 0.5 ? 1 : 0;
+    const s = 1 - Math.min(p, 0.5) * 0.35;
+    if (E.eyesC) E.eyesC.style.opacity = q;
+    E.eyesOpen.style.transform = `translateY(${p * 6}px) scaleY(${s * eyeWide})`;
+    E.eyesOpen.style.opacity = 1 - q;
+  }
+}
+function scheduleBlink(now) {
+  const half = Math.random() < 0.15;
+  blinkDepth = half ? 0.55 + Math.random() * 0.15 : 0.92 + Math.random() * 0.08;
+  tClose = 70 + Math.random() * 45;
+  tHold = 40 + Math.random() * 55;
+  tOpen = 115 + Math.random() * 85;
+  nextBlink = now + 2000 + Math.random() * 4800 + (Math.random() < 0.18 ? -1700 : 0);
+}
+function tickBlink(now) {
+  if (!E.eyesOpen) return;
+  if (!isNaN(forceBlink)) { applyBlink(forceBlink); return; }
+  let p = 0;
+  if (blinkPhase === "idle" && now >= nextBlink) { blinkPhase = "closing"; blinkStart = now; }
+  if (blinkPhase === "closing") {
+    const t = (now - blinkStart) / tClose;
+    if (t >= 1) { blinkPhase = "hold"; blinkStart = now; p = 1; } else p = easeIn(t);
+  } else if (blinkPhase === "hold") {
+    p = 1;
+    if (now - blinkStart >= tHold) { blinkPhase = "opening"; blinkStart = now; }
+  } else if (blinkPhase === "opening") {
+    const t = (now - blinkStart) / tOpen;
+    if (t >= 1) { blinkPhase = "idle"; p = 0; scheduleBlink(now); }
+    else p = 1 - easeOut(t);
+  }
+  // หลับ (sleepFactor) กับกะพริบตามหน้าจริง (faceBlink) ทับการกะพริบออโต้ได้
+  const ovr = Math.max(sleepFactor * 0.95,
+    faceOn && now - faceAt < 800 ? Math.max(0, Math.min(1, (faceBlink - 0.25) / 0.3)) : 0);
+  applyBlink(Math.max(p * blinkDepth, ovr));
+}
+
+// ---------- mouse ----------
+let nx = 0, ny = 0;
+addEventListener("mousemove", e => {
+  if (editMode) return; // ระหว่างจัดตำแหน่ง โมเดลไม่ต้องหันตามเมาส์
+  nx = (e.clientX / innerWidth - 0.5) * 2;
+  ny = (e.clientY / innerHeight - 0.5) * 2;
+});
+
+// ---------- mic ----------
+let analyser = null, audioData = null, level = 0, smooth = 0, prevSmooth = 0, openness = 0, blush = 0;
+const sens = $("sens");
+sens.value = parseFloat(params.get("sens")) || localStorage.studioSens || 8;
+sens.oninput = () => localStorage.studioSens = sens.value;
+// จูนคาแรกเตอร์: ความแรงอีโมต + ความขี้เล่น (พลังงานการขยับเองทั้งระบบ — ค่าน้อย = สุขุม)
+const emoK = $("emoK"), liveK = $("liveK");
+emoK.value = parseFloat(localStorage.studioEmoK) || 1;
+emoK.oninput = () => localStorage.studioEmoK = emoK.value;
+liveK.value = parseFloat(localStorage.studioLive) || 0.75;
+liveK.oninput = () => localStorage.studioLive = liveK.value;
+$("micBtn").onclick = async () => {
+  if (analyser) { analyser = null; $("micBtn").textContent = "🎤 เปิดไมค์"; $("micBtn").classList.remove("on"); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    const ctx = new AudioContext();
+    ctx.createMediaStreamSource(stream).connect(analyser = ctx.createAnalyser());
+    analyser.fftSize = 1024;
+    audioData = new Float32Array(analyser.fftSize);
+    $("micBtn").textContent = "🎤 ไมค์ทำงาน"; $("micBtn").classList.add("on");
+  } catch (err) { alert("เปิดไมค์ไม่ได้: " + err.message); }
+};
+function tickMic(now) {
+  if (wsFresh(now)) {
+    level = wsData.level * sens.value * 1.2;
+  } else if (analyser) {
+    analyser.getFloatTimeDomainData(audioData);
+    let sum = 0;
+    for (let i = 0; i < audioData.length; i++) sum += audioData[i] * audioData[i];
+    level = Math.sqrt(sum / audioData.length) * sens.value;
+  } else { level = 0; }
+  smooth = level > smooth ? smooth * 0.5 + level * 0.5 : smooth * 0.86 + level * 0.14;
+  $("meter").style.width = Math.min(100, smooth * 100) + "%";
+}
+
+// ---------- ใบไม้ร่วง (เฉพาะอวตารที่คอนฟิกไว้) ----------
+const leaves = [];
+let nextLeaf = performance.now() + 800, prewarm = def.leaves ? 4 : 0;
+function spawnLeaf(now) {
+  const img = document.createElement("img");
+  img.className = "leaf";
+  img.src = DIR + def.leaves.srcs[Math.floor(Math.random() * def.leaves.srcs.length)] + "?v=" + VER;
+  E.leaves.appendChild(img);
+  leaves.push({
+    el: img, x: 90 + Math.random() * 840, y: 400 + Math.random() * 240,
+    vy: 42 + Math.random() * 40, amp: 14 + Math.random() * 34,
+    freq: 0.7 + Math.random() * 0.9, phase: Math.random() * 6.28,
+    rot: Math.random() * 360, vrot: (Math.random() < 0.5 ? -1 : 1) * (25 + Math.random() * 60),
+    scale: 0.7 + Math.random() * 0.5, born: now,
+  });
+}
+function tickLeaves(now, dt) {
+  if (!def.leaves || !E.leaves) return;
+  while (prewarm > 0) {
+    spawnLeaf(now - 500);
+    leaves[leaves.length - 1].y += Math.random() * 500;
+    prewarm--;
+  }
+  if (now >= nextLeaf && leaves.length < 14) {
+    spawnLeaf(now);
+    nextLeaf = now + 900 + Math.random() * 1900;
+  }
+  for (let i = leaves.length - 1; i >= 0; i--) {
+    const L = leaves[i];
+    L.y += L.vy * dt;
+    L.rot += L.vrot * dt;
+    const sway = Math.sin(now / 1000 * L.freq * 6.28 + L.phase) * L.amp;
+    const fadeIn = Math.min(1, (now - L.born) / 400);
+    const fadeOut = L.y > 1330 ? Math.max(0, (1450 - L.y) / 120) : 1;
+    L.el.style.opacity = Math.min(fadeIn, fadeOut);
+    L.el.style.transform = `translate(${L.x + sway}px, ${L.y}px) rotate(${L.rot}deg) scale(${L.scale})`;
+    if (L.y > 1460) { L.el.remove(); leaves.splice(i, 1); }
+  }
+}
+
+// ---------- ระบบ motion: config เป็นค่าเริ่ม / layout[ชื่อ].m + .k ทับได้จาก editor ----------
+let motionNodes = [], wiggleNodes = [], pendulumNodes = [], hasHead = false;
+function rebuildMotions() {
+  for (const n of motionNodes) {
+    if (n.grp) continue; // กลุ่มโครงริก (หัว/หน้า) คงที่ ไม่ต้องล้าง
+    n.el.style.transform = "";
+    if (n.m === "blush") n.el.style.opacity = "";
+  }
+  motionNodes = [];
+  groupDefs.forEach((g, i) => motionNodes.push({ el: g.el, m: g.m, k: g.k, idx: i, v: 0, grp: true }));
+  let idx = groupDefs.length;
+  for (const name in partEls) {
+    const ov = layout[name] || {};
+    for (const el of partEls[name]) {
+      if (el === E.pupils) continue; // ตาดำใช้ transform มองตามเมาส์อยู่แล้ว
+      const d = elDefault.get(el) || {};
+      const m = ov.m !== undefined ? ov.m : d.m;
+      if (!m || m === "none") continue;
+      if (!d.hasOrigin && MOTION_ORIGIN[m]) el.style.transformOrigin = MOTION_ORIGIN[m];
+      motionNodes.push({ el, m, k: (ov.k ?? 1) * (d.k ?? 1), idx: idx++, v: 0 });
+    }
+  }
+  wiggleNodes = motionNodes.filter(n => n.m === "wiggle");
+  pendulumNodes = motionNodes.filter(n => n.m === "pendulum");
+  hasHead = motionNodes.some(n => n.m === "head");
+}
+
+// ---------- springs & state ----------
+const sRot = new Spring(), sX = new Spring(), sY = new Spring();
+const fRot = new Spring(), fX = new Spring(), fY = new Spring();
+const swX = new Spring(), swR = new Spring();
+const sEar = new Spring(), sTail = new Spring();
+let nextFlick = performance.now() + 4000, nextSwish = performance.now() + 3000, perkAt = 0;
+
+// ---------- interactive: อีโมต / หลับออโต้ / ลมเมาส์ / จังหวะพิมพ์ / โยกตามเพลง / กล้อง ----------
+let emoteId = 0, emoteT0 = 0, nextBurst = 0, eyeWide = 1;
+let sleepAuto = params.has("nosleep") ? false : (localStorage.studioSleep ?? "1") === "1";
+let sleepForced = false, sleepFactor = 0, lastActive = performance.now();
+let typedPulse = 0, kb = 0, wsMb = false, lastFlick = 0;
+let wind = 0, prevMxF = 0;
+let beatMode = params.has("beat") || localStorage.studioBeat === "1";
+let beatAvg = 0.05, beatNext = 0, beatPulse = 0;
+let camOn = false, camStream = null, camNX = 0, camNY = 0, camAt = -1e9, camPrev = null, camTimer = 0, camKick = 0;
+let faceOn = false, faceLm = null, faceVid = null, faceStream = null, faceLoop = 0, faceNeu = null;
+let faceNX = 0, faceNY = 0, faceRoll = 0, faceJaw = 0, faceBlink = 0, faceAt = -1e9;
+
+// อีโมต 1-9: กดเลขในหน้านี้ / Ctrl+Alt+เลข ทั้งเครื่อง (ผ่านตัวช่วย) / window.emote(n) จากคอนโซล
+// 1 พยักหน้า 2 ส่ายหน้า 3 ตกใจ 4 เอียงคอ 5 เด้งดีใจ 6 หมุน 7 สั่น 8 หลับ/ตื่น 9 ตื่นเต้น
+function emote(n) {
+  if (editMode || n < 1 || n > 9) return;
+  lastActive = performance.now();
+  playSound("emote_" + n + ".mp3");
+  if (n === 8) { sleepForced = !sleepForced; return; }
+  sleepForced = false;
+  emoteId = n; emoteT0 = performance.now(); nextBurst = 0;
+  wrap.style.transformOrigin = n === 6 ? "512px 780px" : "512px 1350px";
+  if (n === 3) { // ตกใจ: หู+หางสะบัดแรงทันที
+    wiggleNodes.forEach((nd, i) => nd.v += i % 2 ? -220 : 220);
+    pendulumNodes.forEach(nd => nd.v += 150);
+  }
+}
+window.emote = emote;
+// แผงอีโมต 🎭 — กดด้วยเมาส์ได้ ไม่ต้องจำเลข
+["👍 พยักหน้า", "🙅 ส่ายหน้า", "😳 ตกใจ", "🤔 เอียงคอ", "🦘 เด้งดีใจ",
+ "🌀 หมุนตัว", "🥶 สั่น", "😴 หลับ/ตื่น", "🎉 ตื่นเต้น"].forEach((nm, i) => {
+  const b = document.createElement("button");
+  b.textContent = (i + 1) + " " + nm;
+  b.onclick = () => emote(i + 1);
+  $("emotes").append(b);
+});
+$("emoteBtn").onclick = () => $("emotes").classList.toggle("open");
+
+// ท่าทางตอนว่าง: เงียบเกิน 8 วิ (แต่ยังไม่หลับ) → เหลือบมอง/เอียงคอ/หูสะบัด สุ่มเป็นระยะ
+let nextGesture = performance.now() + 12000, gId = 0, gT0 = 0, gRx = 0, gRy = 0;
+
+function clickFlick() {
+  const now = performance.now();
+  if (editMode || now - lastFlick < 300 || !wiggleNodes.length) return;
+  lastFlick = now;
+  wiggleNodes[Math.floor(Math.random() * wiggleNodes.length)].v += (Math.random() < 0.5 ? -1 : 1) * 130;
+}
+addEventListener("keydown", e => {
+  const tag = (document.activeElement || {}).tagName;
+  if (editMode || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || e.repeat) return;
+  lastActive = performance.now();
+  if (e.key >= "1" && e.key <= "9") emote(+e.key);
+  else typedPulse++;
+});
+addEventListener("mousedown", e => {
+  if (!e.target.closest("#editor,#bar,#parts,#emotes")) clickFlick();
+});
+
+// กล้องจับความเคลื่อนไหว: เฟรมย่อ 32x24 diff กันเอง — ไม่ใช้ไลบรารี ประมวลผลในเครื่องล้วน ๆ
+async function startCam() {
+  if (faceOn) stopFace(); // กล้องใช้ได้ทีละโหมด
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 160, height: 120 } });
+    const video = document.createElement("video");
+    video.srcObject = camStream; video.muted = true;
+    await video.play();
+    const cv = document.createElement("canvas");
+    cv.width = 32; cv.height = 24;
+    const cctx = cv.getContext("2d", { willReadFrequently: true });
+    camOn = true; $("camBtn").classList.add("on");
+    camTimer = setInterval(() => {
+      cctx.drawImage(video, 0, 0, 32, 24);
+      const d = cctx.getImageData(0, 0, 32, 24).data;
+      const cur = new Float32Array(32 * 24);
+      for (let i = 0, px = 0; i < d.length; i += 4, px++) cur[px] = d[i] + d[i + 1] + d[i + 2];
+      if (camPrev) {
+        let sum = 0, sx2 = 0, sy2 = 0;
+        for (let px = 0; px < cur.length; px++) {
+          const df = Math.abs(cur[px] - camPrev[px]);
+          if (df > 42) { sum += df; sx2 += (px % 32) * df; sy2 += ((px / 32) | 0) * df; }
+        }
+        const energy = sum / (32 * 24 * 765);
+        if (energy > 0.012) {
+          camAt = performance.now(); lastActive = camAt;
+          camNX = Math.max(-1, Math.min(1, (0.5 - (sx2 / sum) / 32) * 2.4)); // mirror: ขยับขวา = มองขวา
+          camNY = Math.max(-1, Math.min(1, ((sy2 / sum) / 24 - 0.5) * 2.4));
+          if (energy > 0.1 && performance.now() > camKick) { // โบกแรง ๆ = ตื่นเต้น
+            camKick = performance.now() + 900;
+            wiggleNodes.forEach((nd, i) => nd.v += i % 2 ? -150 : 150);
+            pendulumNodes.forEach(nd => nd.v += 110);
+          }
+        }
+      }
+      camPrev = cur;
+    }, 100);
+  } catch (err) { alert("เปิดกล้องไม่ได้: " + err.message); }
+}
+function stopCam() {
+  camOn = false; $("camBtn").classList.remove("on");
+  clearInterval(camTimer);
+  if (camStream) camStream.getTracks().forEach(tr => tr.stop());
+  camStream = null; camPrev = null;
+}
+$("camBtn").onclick = () => camOn ? stopCam() : startCam();
+if (params.has("cam")) startCam();
+
+// จับหน้าจริงด้วย MediaPipe FaceLandmarker — ไฟล์ทั้งหมดอยู่ใน vendor/ (ออฟไลน์ได้ 100%)
+// ต้องเปิดผ่านเซิร์ฟเวอร์ (เปิดอวตาร.bat) หรือใน OBS — เปิดแบบดับเบิลคลิกไฟล์ตรง ๆ โมดูลจะโหลดไม่ได้
+async function startFace() {
+  if (camOn) stopCam(); // กล้องใช้ได้ทีละโหมด
+  try {
+    $("faceBtn").textContent = "🙂…";
+    const vision = await import("./vendor/tasks-vision/vision_bundle.mjs");
+    const files = await vision.FilesetResolver.forVisionTasks("vendor/tasks-vision/wasm");
+    faceLm = faceLm || await vision.FaceLandmarker.createFromOptions(files, {
+      baseOptions: { modelAssetPath: "vendor/face_landmarker.task" },
+      outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true,
+      runningMode: "VIDEO", numFaces: 1,
+    });
+    faceStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+    faceVid = document.createElement("video");
+    faceVid.srcObject = faceStream; faceVid.muted = true;
+    await faceVid.play();
+    faceOn = true; faceNeu = null; // ท่าแรกที่เจอ = ท่ากลาง (นั่งตรง ๆ ตอนกดนะ)
+    $("faceBtn").classList.add("on"); $("faceBtn").textContent = "🙂";
+    const step = () => {
+      if (!faceOn) return;
+      if (faceVid.readyState >= 2) {
+        const res = faceLm.detectForVideo(faceVid, performance.now());
+        const lm = (res.faceLandmarks || [])[0];
+        if (lm) {
+          faceAt = performance.now(); lastActive = faceAt;
+          const nose = lm[1], Lc = lm[234], Rc = lm[454], top = lm[10], chin = lm[152];
+          const yaw = ((nose.x - Lc.x) - (Rc.x - nose.x)) / Math.max(1e-4, Rc.x - Lc.x);
+          const pit = ((nose.y - top.y) - (chin.y - nose.y)) / Math.max(1e-4, chin.y - top.y);
+          const m = (res.facialTransformationMatrixes || [])[0];
+          const roll = m ? Math.atan2(m.data[1], m.data[0]) * 180 / Math.PI : 0;
+          if (!faceNeu) faceNeu = { yaw, pit, roll };
+          faceNX = Math.max(-1, Math.min(1, -(yaw - faceNeu.yaw) * 3.2)); // กระจกเงา: หันขวา = อวตารหันขวา
+          faceNY = Math.max(-1, Math.min(1, (pit - faceNeu.pit) * 4));
+          faceRoll = Math.max(-15, Math.min(15, -(roll - faceNeu.roll)));
+          const bs = ((res.faceBlendshapes || [])[0] || {}).categories || [];
+          const g = nm => (bs.find(c => c.categoryName === nm) || {}).score || 0;
+          faceJaw = Math.min(1, g("jawOpen") * 2.2);
+          faceBlink = (g("eyeBlinkLeft") + g("eyeBlinkRight")) / 2;
+        }
+      }
+      faceLoop = requestAnimationFrame(step);
+    };
+    step();
+  } catch (err) {
+    $("faceBtn").textContent = "🙂";
+    alert("เปิดโหมดจับหน้าไม่ได้: " + err.message +
+      "\n• ต้องเปิดผ่าน เปิดอวตาร.bat (เซิร์ฟเวอร์) หรือใน OBS\n• ต้องมีโฟลเดอร์ vendor/ ครบ (ดู README)");
+  }
+}
+function stopFace() {
+  faceOn = false; faceAt = -1e9;
+  $("faceBtn").classList.remove("on");
+  cancelAnimationFrame(faceLoop);
+  if (faceStream) faceStream.getTracks().forEach(tr => tr.stop());
+  faceStream = null;
+}
+$("faceBtn").onclick = () => faceOn ? stopFace() : startFace();
+if (params.has("face")) startFace();
+$("beatBtn").classList.toggle("on", beatMode);
+$("beatBtn").onclick = () => {
+  beatMode = !beatMode; localStorage.studioBeat = beatMode ? "1" : "0";
+  $("beatBtn").classList.toggle("on", beatMode);
+};
+$("sleepBtn").classList.toggle("on", sleepAuto);
+$("sleepBtn").onclick = () => {
+  sleepAuto = !sleepAuto; localStorage.studioSleep = sleepAuto ? "1" : "0";
+  $("sleepBtn").classList.toggle("on", sleepAuto);
+  if (!sleepAuto) sleepForced = false;
+};
+
+// ---------- ☰ เมนูหลัก ----------
+$("menuBtn").onclick = () => $("menu").classList.toggle("open");
+$("menuClose").onclick = () => $("menu").classList.remove("open");
+
+// ---------- เสียงประกอบ: sounds/emote_N.mp3, sounds/donate.mp3 (ต่ออวตารทับได้ที่ avatars/<id>/sounds/) ----------
+let soundOn = (localStorage.studioSound ?? "1") === "1";
+$("soundBtn").classList.toggle("on", soundOn);
+$("soundBtn").onclick = () => {
+  soundOn = !soundOn; localStorage.studioSound = soundOn ? "1" : "0";
+  $("soundBtn").classList.toggle("on", soundOn);
+};
+const tryPlay = el2 => { // play() บางที่ไม่คืน Promise (เบราว์เซอร์เก่า) — กันพังทุกทาง
+  try { const pr = el2.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) {}
+};
+function playSound(name) {
+  if (!soundOn) return;
+  const a = new Audio(DIR + "sounds/" + name);   // ของอวตารตัวนี้ก่อน
+  a.volume = 0.9;
+  a.onerror = () => {                            // ไม่มี → ใช้โฟลเดอร์กลาง sounds/
+    const b = new Audio("sounds/" + name);
+    b.volume = 0.9;
+    b.onerror = () => {};                        // ไม่มีทั้งคู่ = เงียบไป ไม่ใช่ error
+    tryPlay(b);
+  };
+  tryPlay(a);
+}
+
+// ---------- รูปอีโมต: avatars/<id>/emote_N.png (1024x1536) มีไฟล์ = ใช้อัตโนมัติ ----------
+// โชว์ทับกลุ่มหน้าตอนอีโมต N ทำงาน (emote_8 = โชว์ตลอดที่หลับ) เฟดเข้า-ออกให้เอง
+const emoteImgs = {};
+for (let i = 1; i <= 9; i++) {
+  const im = new Image();
+  im.src = DIR + "emote_" + i + ".png?v=" + VER;
+  im.onload = () => {
+    im.className = "full";
+    im.style.opacity = 0;
+    im.style.transition = "opacity .25s";
+    im.style.zIndex = 500;
+    im.style.pointerEvents = "none";
+    (E.faceParent || wrap).append(im);
+    emoteImgs[i] = im;
+  };
+  im.onerror = () => {}; // ไม่มีไฟล์ = ข้าม (ใส่ทีหลังได้ทันที)
+}
+
+// ---------- แจ้งเตือนโดเนท: window.donate(ชื่อ, จำนวน, ข้อความ) หรือยิง HTTP ผ่านตัวช่วย ----------
+function showDonate(d) {
+  $("dnName").textContent = d.name || "ผู้ใจดี";
+  $("dnAmt").textContent = d.amount ? "— " + d.amount : "";
+  $("dnMsg").textContent = d.msg || "";
+  const bn = $("donateBox");
+  bn.classList.remove("show"); void bn.offsetWidth; bn.classList.add("show");
+  playSound("donate.mp3");
+  emote(9); // ตื่นเต้นสุด ๆ
+  for (let i = 0; i < 24; i++) {
+    const p = document.createElement("i");
+    p.className = "confetti";
+    p.style.left = 8 + Math.random() * 84 + "%";
+    p.style.background = `hsl(${Math.random() * 360}, 90%, 60%)`;
+    p.style.animationDelay = Math.random() * 0.6 + "s";
+    p.style.animationDuration = 1.6 + Math.random() * 1.2 + "s";
+    document.body.append(p);
+    setTimeout(() => p.remove(), 3600);
+  }
+  clearTimeout(showDonate.t);
+  showDonate.t = setTimeout(() => bn.classList.remove("show"), 7000);
+}
+window.donate = (name, amount, msg) => showDonate({ name, amount, msg });
+$("donateTestBtn").onclick = () => showDonate({ name: "ผู้ชมใจดี", amount: "100 บาท", msg: "สู้ๆ นะ!" });
+
+// ---------- อัดคลิป: WebM (เริ่ม/หยุด) + GIF 4 วิ — เลือกแชร์ "แท็บ/หน้าต่างนี้" ----------
+let recorder = null;
+$("recBtn").onclick = async () => {
+  if (recorder) { recorder.stop(); return; }
+  try {
+    const st = await navigator.mediaDevices.getDisplayMedia(
+      { video: { frameRate: 60 }, audio: false, preferCurrentTab: true });
+    const chunks = [];
+    const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm";
+    recorder = new MediaRecorder(st, { mimeType: mime, videoBitsPerSecond: 8e6 });
+    recorder.ondataavailable = ev => ev.data.size && chunks.push(ev.data);
+    recorder.onstop = () => {
+      st.getTracks().forEach(tr => tr.stop());
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob(chunks, { type: "video/webm" }));
+      a.download = "avatar-" + AV + "-" + Date.now() + ".webm";
+      a.click();
+      recorder = null;
+      $("recBtn").textContent = "🎬 อัดวิดีโอ (WebM)";
+    };
+    st.getVideoTracks()[0].onended = () => recorder && recorder.stop(); // กดหยุดแชร์ = หยุดอัด
+    recorder.start();
+    $("recBtn").textContent = "⏹ กำลังอัด… (กดเพื่อหยุด)";
+  } catch (e) { if (e.name !== "NotAllowedError") alert("อัดไม่ได้: " + e.message); }
+};
+$("gifBtn").onclick = async () => {
+  if ($("gifBtn").disabled) return;
+  try {
+    await new Promise((res, rej) => {
+      if (window.GIF) return res();
+      const s = document.createElement("script");
+      s.src = "vendor/gif.js?v=" + VER;
+      s.onload = res;
+      s.onerror = () => rej(new Error("ไม่พบ vendor/gif.js"));
+      document.head.append(s);
+    });
+    const st = await navigator.mediaDevices.getDisplayMedia(
+      { video: true, audio: false, preferCurrentTab: true });
+    const video = document.createElement("video");
+    video.srcObject = st; video.muted = true;
+    await video.play();
+    const W2 = 480, H2 = Math.max(2, Math.round(W2 * video.videoHeight / Math.max(1, video.videoWidth)));
+    const cv = document.createElement("canvas");
+    cv.width = W2; cv.height = H2;
+    const cctx2 = cv.getContext("2d");
+    const gif = new GIF({ workers: 2, quality: 12, width: W2, height: H2,
+                          workerScript: "vendor/gif.worker.js" });
+    $("gifBtn").disabled = true;
+    $("gifBtn").textContent = "🖼 กำลังจับภาพ 4 วิ…";
+    const t0 = performance.now();
+    await new Promise(res => {
+      const grab = () => {
+        cctx2.drawImage(video, 0, 0, W2, H2);
+        gif.addFrame(cctx2, { copy: true, delay: 100 });
+        performance.now() - t0 < 4000 ? setTimeout(grab, 100) : res();
+      };
+      grab();
+    });
+    st.getTracks().forEach(tr => tr.stop());
+    $("gifBtn").textContent = "🖼 กำลังบีบไฟล์…";
+    gif.on("finished", blob => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "avatar-" + AV + "-" + Date.now() + ".gif";
+      a.click();
+      $("gifBtn").disabled = false;
+      $("gifBtn").textContent = "🖼 GIF 4 วินาที";
+    });
+    gif.render();
+  } catch (e) {
+    $("gifBtn").disabled = false;
+    $("gifBtn").textContent = "🖼 GIF 4 วินาที";
+    if (e.name !== "NotAllowedError") alert("ทำ GIF ไม่ได้: " + e.message);
+  }
+};
+
+const demo = params.has("demo");
+let demoT = 0;
+if (demo) {
+  const b = $("demoBadge");
+  b.style.display = "block";
+  b.style.pointerEvents = "auto";
+  b.onclick = () => location.href = location.pathname + "?avatar=" + AV;
+}
+
+// ---------- main loop ----------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const t = now / 1000;
+
+  if (demo) {
+    demoT += dt;
+    nx = Math.sin(demoT * 0.8) * 0.85;
+    ny = Math.sin(demoT * 0.5) * 0.5;
+    smooth = Math.max(0, Math.sin(demoT * 5.5)) * (0.4 + 0.6 * Math.abs(Math.sin(demoT * 0.7)));
+    $("meter").style.width = Math.min(100, smooth * 100) + "%";
+  } else {
+    if (!editMode && wsFresh(now)) {
+      nx = Math.max(-1, Math.min(1, ((wsData.mx - wsData.vx) / wsData.vw - 0.5) * 2));
+      ny = Math.max(-1, Math.min(1, ((wsData.my - wsData.vy) / wsData.vh - 0.5) * 2));
+    }
+    tickMic(now);
+  }
+  const linked = wsFresh(now);
+  $("wsState").textContent = linked ? "🔗✓" : "🔗–";
+  $("wsState").style.color = linked ? "#7dcf95" : "#888";
+  $("dot").style.background = linked ? "#2e7d46" : "#c33";
+  if (debugMode) {
+    $("debug").textContent =
+      `avatar: ${AV}  obs: ${obsMode}  helper: ${linked ? "CONNECTED" : "NOT FOUND"}\n` +
+      `level: ${level.toFixed(3)}  smooth: ${smooth.toFixed(3)}\n` +
+      `mouse: ${nx.toFixed(2)}, ${ny.toFixed(2)}  nodes: ${motionNodes.length}`;
+  }
+  tickBlink(now);
+  tickLeaves(now, dt);
+
+  // เริ่มพูด → หูสะบัด หางสะบัด (+ใบไม้ร่วงพรูถ้ามี)
+  if (smooth > 0.22 && prevSmooth <= 0.22 && now > perkAt) {
+    wiggleNodes.forEach((n, i) => n.v += i % 2 ? -140 : 140);
+    pendulumNodes.forEach(n => n.v += 90);
+    if (def.leaves) for (let k = 0; k < 3 && leaves.length < 14; k++) spawnLeaf(now);
+    perkAt = now + 2500;
+  }
+  prevSmooth = smooth;
+
+  // ปาก: gamma curve + flutter ระหว่างพูด (โหมดจับหน้า: อ้าปากเงียบ ๆ ปากก็ขยับตาม)
+  const faceJawNow = faceOn && now - faceAt < 800 ? faceJaw : 0;
+  const targetO = Math.max(faceJawNow,
+    Math.pow(Math.max(0, Math.min(1, (smooth - 0.05) * 1.75)), 0.8));
+  openness += (targetO - openness) * (1 - Math.pow(targetO > openness ? 0.0001 : 0.008, dt));
+  const flutter = (Math.sin(now / 45) * Math.sin(now / 97 + 1)) * 0.07
+                  * Math.min(1, openness * 3) * Math.min(1, (1 - openness) * 3);
+  setMouth01(openness + flutter, now);
+
+  // แก้มแดง (ใช้กับชิ้น motion=blush): ขึ้นไว คลายช้า
+  const blushT = Math.max(0, Math.min(1, (smooth - 0.15) * 2.2));
+  blush += (blushT - blush) * (1 - Math.pow(blushT > blush ? 0.02 : 0.45, dt));
+
+  // ---- interactive layer: หลับ/ลม/พิมพ์/จังหวะ/อีโมต ----
+  const lk = parseFloat(liveK.value) || 1; // ความขี้เล่น: สเกลการขยับเองทั้งหมด (น้อย = สุขุม)
+  if (Math.abs(nx - prevMxF) > 0.02 || smooth > 0.15) lastActive = now; // มีเสียง/ขยับ = ยังตื่น
+  wind = Math.min(1.6, wind + Math.abs(nx - prevMxF) * 2.2); // สะบัดเมาส์เร็ว = ลมกรรโชก
+  wind *= Math.pow(0.05, dt);
+  prevMxF = nx;
+  const sleepT = (sleepForced || (sleepAuto && now - lastActive > 45000)) ? 1 : 0;
+  sleepFactor += (sleepT - sleepFactor) * (1 - Math.pow(sleepT > sleepFactor ? 0.45 : 0.002, dt));
+  zzz.style.opacity = sleepFactor > 0.05 ? sleepFactor : 0;
+
+  // รูปอีโมต (ถ้ามีไฟล์): โชว์ตอนอีโมตนั้นทำงาน / emote_8 โชว์ตลอดที่หลับ
+  for (const k2 in emoteImgs) {
+    const on = (+k2 === emoteId || (+k2 === 8 && sleepFactor > 0.5)) ? "1" : "0";
+    if (emoteImgs[k2].dataset.on !== on) {
+      emoteImgs[k2].dataset.on = on;
+      emoteImgs[k2].style.opacity = on === "1" ? 1 : 0;
+    }
+  }
+
+  if (beatMode) { // จับ onset จังหวะเพลงจากระดับเสียง
+    beatAvg = beatAvg * 0.995 + level * 0.005;
+    if (level > Math.max(0.12, beatAvg * 1.9) && now >= beatNext) { beatNext = now + 240; beatPulse = 1; }
+  }
+  beatPulse *= Math.pow(0.001, dt);
+  kb = Math.min(10, kb + typedPulse * 3); typedPulse = 0; // พิมพ์ = ตัวเด้งเบา ๆ
+  kb *= Math.pow(0.001, dt);
+
+  // eNX/eNY = อินพุตจำลอง (ผ่านสปริง นุ่มแต่โดนหน่วง) · eHX/eHY/eHR = แรงตรงหลังสปริง
+  // (ท่าเร็ว ๆ อย่างพยัก/ส่ายต้องใช้แบบหลัง — ผ่านสปริงแล้วโดนดูดจนแทบไม่เห็น)
+  let eNX = 0, eNY = 0, eRot = 0, wx2 = 0, wy2 = 0, wr2 = 0, eHX = 0, eHY = 0, eHR = 0;
+  eyeWide = 1;
+  if (emoteId && !editMode) {
+    const et = (now - emoteT0) / 1000;
+    const dcy = d => Math.max(0, 1 - et / d);
+    switch (emoteId) {
+      case 1: // พยักหน้า: กดหัวลงชัด ๆ สองจังหวะ (ตาไม่ต้องขยับ — เหมือนคนพยักจริง)
+        eHY = Math.max(0, Math.sin(et * 12)) * 26 * dcy(1.15);
+        if (et > 1.15) emoteId = 0; break;
+      case 2: // ส่ายหน้า: เหวี่ยงหัวซ้าย-ขวา + หมุนตาม
+        eHX = Math.sin(et * 13) * 20 * dcy(1.2);
+        eHR = Math.sin(et * 13) * 3 * dcy(1.2);
+        if (et > 1.2) emoteId = 0; break;
+      case 3: wy2 = -46 * Math.exp(-et * 5); eHY = -14 * Math.exp(-et * 4);                 // ตกใจ
+              eyeWide = 1 + 0.16 * Math.exp(-et * 2.2); if (et > 1.4) emoteId = 0; break;
+      case 4: eRot = 7 * Math.sin(Math.PI * Math.min(1, et / 1.8)); if (et > 1.8) emoteId = 0; break; // เอียงคอ
+      case 5: wy2 = -Math.abs(Math.sin(et * 10)) * 34 * dcy(1.5); if (et > 1.5) emoteId = 0; break;   // เด้งดีใจ
+      case 6: { const q = Math.min(1, et / 0.75); wr2 = 360 * q * q * (3 - 2 * q); if (et > 0.8) emoteId = 0; break; } // หมุน
+      case 7: wx2 = Math.sin(et * 70) * 3.2 * dcy(1.6); eRot = Math.sin(et * 55) * 0.9 * dcy(1.6);
+              if (et > 1.6) emoteId = 0; break; // สั่น
+      case 9: wy2 = -Math.abs(Math.sin(et * 14)) * 10; // ตื่นเต้น: หู+หางสะบัดรัว
+              if (now >= nextBurst) { nextBurst = now + 320;
+                wiggleNodes.forEach((n2, i) => n2.v += i % 2 ? -160 : 160);
+                pendulumNodes.forEach(n2 => n2.v += 120); }
+              if (et > 3) emoteId = 0; break;
+    }
+    // สไลเดอร์ความแรงอีโมต (ไม่แตะ wr2 — ท่าหมุนต้องครบ 360° เสมอ)
+    const ek = parseFloat(emoK.value) || 1;
+    eHX *= ek; eHY *= ek; eHR *= ek; wx2 *= ek; wy2 *= ek;
+  }
+  // ท่าทางตอนว่าง: เบื่อ → เหลือบมอง/เอียงคอ/หูสะบัด (ก่อนถึงจุดหลับที่ 45 วิ)
+  const idleFor = now - lastActive;
+  if (!editMode && !emoteId && !gId && sleepFactor < 0.3 && idleFor > 8000 && now >= nextGesture) {
+    gId = 1 + Math.floor(Math.random() * 3);
+    gT0 = now;
+    gRx = (Math.random() * 2 - 1) * 0.8 * lk;
+    gRy = (Math.random() * 1.1 - 0.55) * lk;
+    if (gId === 3 && wiggleNodes.length)
+      wiggleNodes.forEach((n2, i) => n2.v += (i % 2 ? -170 : 170) * lk);
+    nextGesture = now + (8000 + Math.random() * 14000) / Math.max(0.25, lk);
+  }
+  if (gId) {
+    const gt = (now - gT0) / 1000;
+    if (emoteId || sleepFactor > 0.5) gId = 0;                 // อีโมต/หลับ มาแทรก = เลิกท่า
+    else if (gId === 1) {                                       // เหลือบมองไปทางสุ่มแล้วกลับ
+      const env = Math.sin(Math.PI * Math.min(1, gt / 2.6));
+      eNX += gRx * env; eNY += gRy * env;
+      if (gt > 2.6) gId = 0;
+    } else if (gId === 2) {                                     // เอียงคอนิด ๆ
+      eRot += 4 * Math.sin(Math.PI * Math.min(1, gt / 2.2)) * Math.sign(gRx || 1);
+      if (gt > 2.2) gId = 0;
+    } else if (gt > 0.5) gId = 0;                               // หูสะบัด (แรงกระตุ้นจ่ายไปแล้ว)
+  }
+
+  // ริกที่หัวนิ่ง (ไม่มีชิ้น motion=head เช่น car5): พยัก/ส่าย ให้ทั้งตัวขยับแทน
+  const wfx = wx2 + (hasHead ? 0 : eHX * 0.45);
+  const wfy = wy2 - kb + (hasHead ? 0 : eHY * 0.45);
+  wrap.style.transform = (wfx || wfy || wr2)
+    ? `translate(${wfx}px, ${wfy}px) rotate(${wr2}deg)` : "";
+
+  // อินพุตรวม: จับหน้า > กล้องจับขยับ > เมาส์ — แล้วบวกอีโมต/หลับ/จังหวะ
+  const faceFresh = faceOn && now - faceAt < 800;
+  let mx2 = nx, my2 = ny;
+  if (!editMode) {
+    if (faceFresh) { mx2 = faceNX; my2 = faceNY; }
+    else if (camOn && now - camAt < 1500) { mx2 = camNX; my2 = camNY; }
+  }
+  // ระหว่างพยัก/ส่ายหน้า หรี่แรงเมาส์ลง — กันท่าไปซ้อนจังหวะที่หัวกำลังเหวี่ยงพอดีแล้วแรงเกิน
+  if (emoteId === 1 || emoteId === 2) { mx2 *= 0.45; my2 *= 0.45; }
+  mx2 = Math.max(-1, Math.min(1, mx2 + eNX));
+  my2 = Math.max(-1, Math.min(1, my2 + eNY + sleepFactor * 0.55 + beatPulse * 0.35));
+
+  // ---- สัญญาณกลางของแต่ละ motion (คำนวณครั้งเดียว แชร์ทุกชิ้น) ----
+  // ดริฟท์ขยับเอง (เทอม nz) คูณ lk — ค่าน้อย = นั่งนิ่งสุขุม / การหันตามเมาส์คงเดิม
+  const hr = sRot.step(mx2 * 2.2 + nz(t, 0.23, 0.52, 0.89) * 0.45 * lk + eRot
+             + sleepFactor * 5 + (faceFresh ? faceRoll * 0.8 : 0), dt, 6, 0.85);
+  const hx = sX.step(mx2 * 7 + nz(t, 0.19, 0.44, 0.83) * 2.2 * lk, dt, 6, 0.85);
+  const hy = sY.step(my2 * 5 + nz(t, 0.28, 0.60, 1.10) * 1.6 * lk, dt, 6, 0.85)
+             + Math.sin(t * 1.65) * 2.2 - openness * 3;
+  const fr = fRot.step(mx2 * 0.5, dt, 4.2, 0.8);
+  const fx = fX.step(mx2 * 5.5 + nz(t, 0.17, 0.41, 0.79) * 1.1 * lk, dt, 4.2, 0.8);
+  const fy = fY.step(my2 * 4.2 + nz(t, 0.26, 0.55, 1.03) * 0.9 * lk, dt, 4.2, 0.8)
+             + Math.sin(t * 1.65 + 0.7) * 1.1 - openness * 1.5;
+  const swx = swX.step(mx2 * 2.5 + nz(t, 0.21, 0.47, 0.91) * (1.4 * lk + wind * 2.5)
+              + wind * 2.2 * Math.sin(t * 2.7), dt, 3.5, 0.6);
+  const swr = swR.step(mx2 * 0.6, dt, 3.5, 0.6);
+  const swy = Math.sin(t * 1.3 + 2.1) * 1.2 * lk;
+  const hrEff = hasHead ? hr : 0; // หัวนิ่ง (เช่น car5) หู/หางไม่ต้องเอียงตามเมาส์
+  const earP = sEar.step(hrEff * 1.4 + nz(t, 0.15, 0.37, 0.71) * 1.8 * lk, dt, 11, 0.35);
+  const tailP = sTail.step(-hrEff * 1.0 + (Math.sin(t * 0.8) * 2.8 + nz(t, 0.13, 0.31, 0.67) * 1.2) * lk
+                + wind * 2.5 * Math.sin(t * 2.3), dt, 5, 0.5);
+  const wig = Math.sin(now / 90);
+
+  // สะบัดสุ่มออโต้ — ขี้เล่นน้อย = เบาลงและห่างขึ้น
+  if (now >= nextFlick) {
+    if (wiggleNodes.length)
+      wiggleNodes[Math.floor(Math.random() * wiggleNodes.length)].v += (Math.random() < 0.5 ? 1 : -1) * 220 * lk;
+    nextFlick = now + (3500 + Math.random() * 8000) / Math.max(0.25, lk);
+  }
+  if (now >= nextSwish) {
+    if (pendulumNodes.length)
+      pendulumNodes[Math.floor(Math.random() * pendulumNodes.length)].v += (Math.random() < 0.5 ? 1 : -1) * 160 * lk;
+    nextSwish = now + (5000 + Math.random() * 9000) / Math.max(0.25, lk);
+  }
+
+  // ---- ลงมือขยับทุกชิ้นตาม motion ของมัน ----
+  for (const n of motionNodes) {
+    const k = n.k;
+    switch (n.m) {
+      case "head": // + แรงอีโมตตรง ๆ ไม่ผ่านสปริง (พยัก/ส่าย/ตกใจ)
+        n.el.style.transform =
+          `translate(${hx * k + eHX}px, ${hy * k + eHY}px) rotate(${hr * k + eHR}deg)`; break;
+      case "face": // หน้ารับแรงอีโมตอ่อนกว่าหัวนิด — ได้มิติพารัลแลกซ์เหมือนขยับด้วยเมาส์
+        n.el.style.transform =
+          `translate(${fx * k + eHX * 0.55}px, ${fy * k + eHY * 0.55}px) rotate(${fr * k + eHR * 0.5}deg)`; break;
+      case "sway":
+        n.el.style.transform = `translate(${swx * k}px, ${swy * k}px) rotate(${swr * k}deg)`; break;
+      case "wiggle":
+        n.v *= Math.pow(0.0005, dt);
+        if (Math.abs(n.v) < 0.5) n.v = 0;
+        n.el.style.transform = `rotate(${(earP * 0.6 + n.v * 0.02 * wig) * k}deg)`; break;
+      case "pendulum":
+        n.v *= Math.pow(0.002, dt);
+        if (Math.abs(n.v) < 0.5) n.v = 0;
+        n.el.style.transform =
+          `rotate(${(tailP + Math.sin(t * (0.8 + n.idx * 0.13) + n.idx * 1.7) * 1.5 * lk + n.v * 0.03 * Math.sin(now / 130)) * k}deg)`; break;
+      case "bob":
+        n.el.style.transform = `translate(0px, ${Math.sin(t * 1.15 + n.idx * 1.3) * 7 * k * lk}px)`; break;
+      case "float":
+        n.el.style.transform =
+          `translate(${Math.sin(t * 0.55 + n.idx) * 6 * k * lk}px, ${Math.cos(t * 0.42 + n.idx * 1.4) * 5 * k * lk}px)`; break;
+      case "blush":
+        n.el.style.opacity = Math.min(1, blush * k); break;
+    }
+  }
+
+  // ตาดำ: เลื่อนใน mask ตาขาว (ตานำ หัวตาม)
+  if (E.pupils && def.pupils) {
+    const gx = Math.sign(mx2) * Math.sqrt(Math.abs(mx2));
+    const gy = Math.sign(my2) * Math.sqrt(Math.abs(my2));
+    E.pupils.style.transform = `translate(${gx * def.pupils.range[0]}px, ${gy * def.pupils.range[1]}px)`;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ---------- toolbar ----------
+if (!obsMode) document.body.style.background = localStorage.studioBg || "#222222";
+document.querySelectorAll(".sw").forEach(el => {
+  el.onclick = () => { document.body.style.background = el.dataset.bg; localStorage.studioBg = el.dataset.bg; };
+});
+
+// ---------- แผงชิ้นส่วน: ติ๊กเปิด/ปิดการแสดงผล (ค่าเก็บใน layout — ติดไปทุกที่) ----------
+const partCbs = {};
+function addPartCheckbox(name) {
+  const lb = document.createElement("label");
+  const cb = partCbs[name] = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = !(layout[name] || {}).h;
+  cb.onchange = () => {
+    (layout[name] ??= {}).h = cb.checked ? 0 : 1;
+    applyPart(name); saveLayout();
+  };
+  lb.append(cb, name);
+  lb.style.color = partColor(name);
+  $("parts").append(lb);
+}
+$("partsBtn").onclick = () => {
+  $("menu").classList.remove("open"); // แผงซ้อนมุมเดียวกัน — เปิดอันนึงปิดอีกอัน
+  $("parts").classList.toggle("open");
+};
+
+// ---------- edit mode ----------
+let editMode = false, editPart = null;
+const partColor = name =>
+  (layout[name] || {}).src ? "#000" : CONFIG_ANIMATED.has(name) ? "#c62828" : "#2e7d32";
+
+function applyPart(name) {
+  const c = layout[name] || {};
+  (partEls[name] || []).forEach(el => {
+    if (!el.dataset.orig) el.dataset.orig = el.src;
+    const want = new URL(c.img ? DIR + c.img + "?v=" + VER : el.dataset.orig, location.href).href;
+    if (el.src !== want && !el.src.startsWith("blob:")) el.src = want;
+    el.style.marginLeft = (c.mx || 0) + "px";
+    el.style.marginTop = (c.my || 0) + "px";
+    el.style.zIndex = c.z ?? "";
+    el.style.rotate = c.r ? c.r + "deg" : "";
+    el.style.visibility = c.h ? "hidden" : "";
+    const w = () => { // ชิ้นที่คอนฟิกกำหนดกว้างไว้ (dataset.w) ให้ย่อขยายจากฐานนั้น ไม่ใช่ขนาดไฟล์จริง
+      const base = el.dataset.w ? parseFloat(el.dataset.w) : el.naturalWidth;
+      el.style.width = c.s && c.s !== 1 ? base * c.s + "px" : el.dataset.w ? base + "px" : "";
+    };
+    el.complete && el.naturalWidth ? w() : el.addEventListener("load", w, { once: true });
+  });
+}
+
+let fileHandle = null, fileTimer = 0;
+async function writeLayoutFile() {
+  const w = await fileHandle.createWritable();
+  await w.write("window.SAVED_LAYOUT = " + JSON.stringify(layout) + ";\n");
+  await w.close();
+}
+const saveLayout = () => {
+  localStorage[LKEY] = JSON.stringify(layout);
+  // เซฟไฟล์ครั้งแรกแล้ว → เซฟตามอัตโนมัติทุกครั้งที่แก้ (หน่วงกันเขียนถี่ตอนลาก)
+  if (fileHandle) {
+    clearTimeout(fileTimer);
+    fileTimer = setTimeout(() => writeLayoutFile().catch(() => fileHandle = null), 800);
+  }
+};
+$("saveFileBtn").onclick = async () => {
+  try {
+    if (!fileHandle && window.showSaveFilePicker)
+      fileHandle = await showSaveFilePicker({ suggestedName: "layout.js",
+        types: [{ description: "layout", accept: { "text/javascript": [".js"] } }] });
+    if (fileHandle) await writeLayoutFile();
+    else {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob(["window.SAVED_LAYOUT = " + JSON.stringify(layout) + ";\n"]));
+      a.download = "layout.js"; a.click();
+      alert("ได้ไฟล์ layout.js แล้ว — ย้ายไปวางใน " + DIR);
+    }
+    $("saveFileBtn").textContent = "✓ เซฟแล้ว — เปิดจากที่ไหนก็ได้ค่านี้";
+    setTimeout(() => $("saveFileBtn").textContent = "📁 เซฟค่าลงโฟลเดอร์อวตาร", 3000);
+  } catch (e) { if (e.name !== "AbortError") alert("เซฟไม่สำเร็จ: " + e.message + "\n(เซฟไว้ใน " + DIR + " นะ)"); }
+};
+
+const editSel = $("editSel");
+function addEditOption(name) {
+  const o = document.createElement("option");
+  o.value = o.textContent = name;
+  o.style.color = partColor(name);
+  editSel.append(o);
+}
+function selectPart(name) {
+  document.querySelectorAll(".editSelected").forEach(el => el.classList.remove("editSelected"));
+  editPart = name || null;
+  if (!editPart) return;
+  editSel.value = editPart;
+  editSel.style.color = partColor(editPart);
+  partEls[editPart].forEach(el => el.classList.add("editSelected"));
+  const c = layout[editPart] || {};
+  $("editScale").value = $("editScaleN").value = c.s || 1;
+  $("editRot").value = $("editRotN").value = c.r || 0;
+  $("motionSel").value = c.m !== undefined ? c.m : "";
+  $("motionK").value = $("motionKN").value = c.k ?? 1;
+}
+editSel.onchange = () => selectPart(editSel.value);
+
+// motion dropdown: "" = ตามริกเดิม
+{
+  const o = document.createElement("option");
+  o.value = ""; o.textContent = "— ตามริกเดิม —";
+  $("motionSel").append(o);
+  for (const m in MOTIONS) {
+    const op = document.createElement("option");
+    op.value = m; op.textContent = MOTIONS[m];
+    $("motionSel").append(op);
+  }
+}
+$("motionSel").onchange = () => {
+  if (!editPart) return;
+  const v = $("motionSel").value;
+  const c = layout[editPart] ??= {};
+  if (v === "") delete c.m; else c.m = v;
+  saveLayout(); rebuildMotions();
+};
+
+// เตือนถ้าไฟล์ที่อ้างไม่อยู่ในโฟลเดอร์อวตาร แล้วโชว์จากไฟล์ที่เพิ่งเลือกไปก่อน
+function fallbackToPicked(name, file) {
+  (partEls[name] || []).forEach(im => im.onerror = () => {
+    im.onerror = null;
+    if (file) im.src = URL.createObjectURL(file);
+    alert("ยังไม่พบไฟล์ใน " + DIR + " — แสดงชั่วคราวจากไฟล์ที่เลือก\nก็อปไฟล์ลงโฟลเดอร์นั้นด้วย ไม่งั้นเปิดครั้งหน้ารูปหาย");
+  });
+}
+function addExtraImg(name, file) {
+  const im = document.createElement("img");
+  im.dataset.part = name;
+  (partEls[name] ??= []).push(im);
+  elDefault.set(im, {});
+  fallbackToPicked(name, file);
+  im.src = DIR + name + "?v=" + VER;
+  wrap.append(im);
+  if (/tail|หาง/i.test(name) && !(layout[name] || {}).m) (layout[name] ??= {}).m = "pendulum";
+  addPartCheckbox(name);
+  addEditOption(name);
+  applyPart(name);
+}
+
+for (const name in partEls) { addPartCheckbox(name); addEditOption(name); }
+for (const name in layout) {
+  if (layout[name].src && !partEls[name]) addExtraImg(name);
+  else applyPart(name);
+}
+rebuildMotions();
+
+function setEditMode(on) {
+  editMode = on;
+  if (on) $("menu").classList.remove("open");
+  document.body.classList.toggle("editing", on);
+  $("editor").classList.toggle("open", on);
+  $("editBtn").classList.toggle("on", on);
+  nx = ny = 0; // โมเดลกลับมาตรงกลาง จะได้จัดตำแหน่งง่าย
+  if (on) selectPart(editSel.value); else selectPart(null);
+}
+$("editBtn").onclick = () => setEditMode(!editMode);
+$("editClose").onclick = () => setEditMode(false);
+addEventListener("keydown", e => { if (e.key === "Escape" && editMode) setEditMode(false); });
+
+let dragAt = null;
+addEventListener("mousedown", e => {
+  if (!editMode || !editPart || e.target.closest("#editor,#bar,#parts,#emotes")) return;
+  dragAt = [e.clientX, e.clientY];
+});
+addEventListener("mouseup", () => dragAt = null);
+addEventListener("mousemove", e => {
+  if (!dragAt || !editPart) return;
+  const k = Math.min(innerWidth / 1024, innerHeight / 1536);
+  const c = layout[editPart] ??= {};
+  c.mx = (c.mx || 0) + (e.clientX - dragAt[0]) / k;
+  c.my = (c.my || 0) + (e.clientY - dragAt[1]) / k;
+  dragAt = [e.clientX, e.clientY];
+  applyPart(editPart); saveLayout();
+});
+addEventListener("wheel", e => {
+  if (!editMode || !editPart || e.target.closest("#editor,#bar,#parts,#emotes")) return;
+  const c = layout[editPart] ??= {};
+  c.s = Math.max(0.1, Math.min(3, (c.s || 1) * (e.deltaY < 0 ? 1.05 : 1 / 1.05)));
+  $("editScale").value = c.s;
+  $("editScaleN").value = c.s.toFixed(2);
+  applyPart(editPart); saveLayout();
+});
+// สไลเดอร์กับช่องตัวเลขซิงก์กันสองทาง
+function wirePair(rangeEl, numEl, key, after) {
+  const set = v => {
+    if (!editPart || isNaN(v)) return;
+    (layout[editPart] ??= {})[key] = v;
+    after(); saveLayout();
+  };
+  rangeEl.oninput = () => { numEl.value = rangeEl.value; set(parseFloat(rangeEl.value)); };
+  numEl.oninput = () => { rangeEl.value = numEl.value; set(parseFloat(numEl.value)); };
+}
+wirePair($("editScale"), $("editScaleN"), "s", () => applyPart(editPart));
+wirePair($("editRot"), $("editRotN"), "r", () => applyPart(editPart));
+wirePair($("motionK"), $("motionKN"), "k", rebuildMotions);
+const bumpZ = d => {
+  if (!editPart) return;
+  const c = layout[editPart] ??= {};
+  c.z = (c.z || 0) + d;
+  applyPart(editPart); saveLayout();
+};
+$("zUp").onclick = () => bumpZ(1);
+$("zDown").onclick = () => bumpZ(-1);
+$("editReset").onclick = () => {
+  if (!editPart) return;
+  const src = (layout[editPart] || {}).src;
+  if (src) layout[editPart] = { src }; else delete layout[editPart];
+  $("editScale").value = $("editScaleN").value = 1;
+  $("editRot").value = $("editRotN").value = 0;
+  $("motionSel").value = ""; $("motionK").value = $("motionKN").value = 1;
+  partCbs[editPart].checked = true;
+  applyPart(editPart); rebuildMotions(); saveLayout();
+};
+$("delBtn").onclick = () => {
+  if (!editPart) return;
+  const name = editPart;
+  if ((layout[name] || {}).src) {
+    // รูปที่เพิ่มเอง: ลบออกจากอวตารถาวร (ตัวไฟล์ในโฟลเดอร์ไม่ถูกลบ)
+    if (!confirm(`ลบรูป "${name}" ออกจากอวตาร?`)) return;
+    partEls[name].forEach(el => el.remove());
+    delete partEls[name]; delete layout[name];
+    partCbs[name].parentElement.remove(); delete partCbs[name];
+    [...editSel.options].find(o => o.value === name)?.remove();
+    selectPart(editSel.value);
+    rebuildMotions();
+  } else {
+    // ชิ้นเดิมของริก: ซ่อนแบบจำค่า (กลับมาติ๊กเปิดในแผง 🧩 ได้)
+    (layout[name] ??= {}).h = 1;
+    partCbs[name].checked = false;
+    applyPart(name);
+  }
+  saveLayout();
+};
+$("addImgBtn").onclick = () => $("addImgFile").click();
+$("addImgFile").onchange = () => {
+  const f = $("addImgFile").files[0];
+  $("addImgFile").value = "";
+  if (!f) return;
+  if (partEls[f.name]) { alert("มีชิ้น " + f.name + " อยู่แล้ว"); return; }
+  layout[f.name] = { src: f.name };
+  addExtraImg(f.name, f);
+  selectPart(f.name);
+  rebuildMotions();
+  saveLayout();
+};
+$("swapImgBtn").onclick = () => { if (editPart) $("swapImgFile").click(); };
+$("swapImgFile").onchange = () => {
+  const f = $("swapImgFile").files[0];
+  $("swapImgFile").value = "";
+  if (!f || !editPart) return;
+  if (partEls[editPart].length > 1 &&
+      !confirm(`ชิ้น "${editPart}" มี ${partEls[editPart].length} รูป (เช่น ปากหลายเฟรม) จะใช้รูปเดียวแทนทั้งหมดเลยไหม?`)) return;
+  partEls[editPart].forEach(el => { if (el.src.startsWith("blob:")) el.src = el.dataset.orig; });
+  const c = layout[editPart] ??= {};
+  c.img = f.name;
+  delete c.h; // ใส่รูปแล้วโชว์เลย (สำคัญกับพรีเซ็ทเปล่าที่ซ่อนทุกชิ้นไว้)
+  partCbs[editPart].checked = true;
+  fallbackToPicked(editPart, f);
+  applyPart(editPart); saveLayout();
+};
+
+// ---------- presets ต่ออวตาร: เก็บ layout ทั้งชุดไว้หลายแบบ สลับได้ ----------
+let presets = {};
+try { presets = JSON.parse(localStorage[PKEY] || "{}"); } catch (e) {}
+const presetSel = $("presetSel");
+function refreshPresets() {
+  presetSel.innerHTML = '<option value="">— เลือกพรีเซ็ท —</option>' +
+    '<option value="__blank__">🈳 เปล่า (ซ่อนทุกชิ้น ไว้ใส่รูปใหม่)</option>';
+  for (const n in presets) {
+    const o = document.createElement("option");
+    o.value = o.textContent = n;
+    presetSel.append(o);
+  }
+}
+refreshPresets();
+presetSel.onchange = () => {
+  const n = presetSel.value;
+  if (!n) return;
+  if (n === "__blank__") {
+    // พรีเซ็ทเปล่า: ซ่อนทุกชิ้น แต่รายชื่อ (สีแดง = ส่วนขยับ) ยังอยู่ครบ
+    // เลือกชิ้นแล้วกด 🔄 ใส่รูป — ชิ้นนั้นโผล่พร้อมขยับตามริกทันที
+    if (!confirm("เริ่มพรีเซ็ทเปล่า? ทุกชิ้นถูกซ่อน (หน้าจะโหลดใหม่)")) { presetSel.value = ""; return; }
+    const blank = {};
+    for (const name in partEls) blank[name] = Object.assign({}, layout[name], { h: 1 });
+    localStorage[LKEY] = JSON.stringify(blank);
+    location.reload();
+    return;
+  }
+  if (!confirm(`ใช้พรีเซ็ท "${n}"? (หน้าจะโหลดใหม่ ค่าที่ยังไม่ได้บันทึกเป็นพรีเซ็ทจะถูกแทนที่)`)) {
+    presetSel.value = ""; return;
+  }
+  localStorage[LKEY] = JSON.stringify(presets[n]);
+  location.reload();
+};
+$("presetSave").onclick = () => {
+  const n = prompt("ตั้งชื่อพรีเซ็ท:", presetSel.value === "__blank__" ? "" : presetSel.value || "");
+  if (!n || n === "__blank__") return;
+  presets[n] = JSON.parse(JSON.stringify(layout));
+  localStorage[PKEY] = JSON.stringify(presets);
+  refreshPresets();
+  presetSel.value = n;
+};
+$("presetDel").onclick = () => {
+  const n = presetSel.value;
+  if (!n || n === "__blank__") { alert("เลือกพรีเซ็ทที่จะลบก่อน"); return; }
+  if (!confirm(`ลบพรีเซ็ท "${n}"?`)) return;
+  delete presets[n];
+  localStorage[PKEY] = JSON.stringify(presets);
+  refreshPresets();
+};
+
+$("obsLinkBtn").onclick = async () => {
+  const u = location.origin + location.pathname +
+    "?obs&avatar=" + AV + (faceOn ? "&face" : camOn ? "&cam" : "") +
+    (beatMode ? "&beat" : "") + (sleepAuto ? "" : "&nosleep") +
+    "&layout=" + encodeURIComponent(JSON.stringify(layout));
+  try { await navigator.clipboard.writeText(u); $("obsLinkBtn").textContent = "✓ ก็อปแล้ว — วางใน OBS Browser Source"; }
+  catch (e) { prompt("ก็อปลิงก์นี้ไปใส่ OBS:", u); }
+  setTimeout(() => $("obsLinkBtn").textContent = "📋 ก็อปลิงก์สำหรับ OBS", 3000);
+};
+
+let barTimer = 0;
+function pokeBar() {
+  $("bar").classList.remove("hidden");
+  clearTimeout(barTimer);
+  barTimer = setTimeout(() => $("bar").classList.add("hidden"), 3500);
+}
+addEventListener("mousemove", e => { if (e.clientY > innerHeight - 120) pokeBar(); });
+pokeBar();
+setTimeout(() => $("hint").style.opacity = 0, 9000);
+
+requestAnimationFrame(loop);
+} // boot
+</script>
+</body>
+</html>

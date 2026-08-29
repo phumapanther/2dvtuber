@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>WhiteTiger PNGTuber car4</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #222; }
+  #stage { position: absolute; inset: 0; display: flex; justify-content: center; align-items: flex-end; }
+  #avatar { position: relative; width: 1024px; height: 1536px; transform-origin: 50% 100%; }
+  #avatar img { position: absolute; pointer-events: none; user-select: none; }
+  .full { left: 0; top: 0; width: 1024px; height: 1536px; }
+  #head { position: absolute; left: 0; top: 0; width: 1024px; height: 1536px;
+          transform-origin: 484px 900px; will-change: transform; }
+  #face { position: absolute; left: 0; top: 0; width: 1024px; height: 1536px;
+          transform-origin: 484px 560px; will-change: transform; }
+  /* กะพริบ: สลับภาพทันทีแบบอนิเมะ + บีบเบา ๆ นำ */
+  #eyesOpen { position: absolute; left: 0; top: 0; width: 1024px; height: 1536px;
+              transform-origin: 484px 512px; will-change: transform; }
+  #eyesC { opacity: 0; }
+  /* ตาดำเลื่อนตามเมาส์ อยู่ใน mask ตาขาว เลยไม่มีวันหลุดออกนอกตา */
+  #pupilw { position: absolute; left: 0; top: 0; width: 1024px; height: 1536px;
+    -webkit-mask-image: url("car4_eyes_mask.png"); mask-image: url("car4_eyes_mask.png");
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+  #pupils { will-change: transform; }
+  #earL { left: 207px; top: 136px; transform-origin: 130px 165px; will-change: transform; }
+  #earR { left: 584px; top: 145px; transform-origin: 60px 175px; will-change: transform; }
+  #tail { left: 482px; top: 450px; transform-origin: 78px 950px; will-change: transform; }
+  .mouth { opacity: 0; }
+
+  #bar { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
+         display: flex; gap: 10px; align-items: center; padding: 8px 14px;
+         background: rgba(20,20,20,.82); border-radius: 12px; font: 14px system-ui, sans-serif;
+         color: #eee; transition: opacity .4s; z-index: 10; }
+  #bar.hidden { opacity: 0; pointer-events: none; }
+  #bar button { border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer;
+                background: #444; color: #eee; font: inherit; }
+  #bar button.on { background: #2e7d46; }
+  .sw { width: 22px; height: 22px; border-radius: 6px; border: 2px solid #666; cursor: pointer; }
+  #meterWrap { width: 90px; height: 8px; background: #333; border-radius: 4px; overflow: hidden; }
+  #meter { height: 100%; width: 0%; background: #4caf7d; }
+  #sens { width: 110px; }
+  #hint { position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+          color: #bbb; font: 13px system-ui, sans-serif; background: rgba(20,20,20,.6);
+          padding: 6px 12px; border-radius: 8px; transition: opacity 1s; z-index: 10; }
+  #demoBadge { position: fixed; top: 12px; right: 12px; z-index: 20; display: none;
+               background: #c62828; color: #fff; font: bold 15px system-ui, sans-serif;
+               padding: 10px 14px; border-radius: 10px; cursor: pointer; }
+  #dot { position: fixed; left: 10px; bottom: 10px; width: 14px; height: 14px;
+         border-radius: 50%; background: #c33; z-index: 30; display: none; }
+  #debug { position: fixed; top: 10px; left: 10px; color: #6f6; font: 13px monospace;
+           background: rgba(0,0,0,.75); padding: 8px 12px; border-radius: 8px;
+           z-index: 30; white-space: pre; display: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="avatar">
+    <img class="full" src="car4_body.png"><!-- ลำตัว/ผิวฐาน ลึกสุด ก่อนหาง -->
+    <img id="tail" src="car4_tail.png">
+    <div id="head">
+      <img id="earL" src="car4_ear_L.png">
+      <img id="earR" src="car4_ear_R.png">
+      <img class="full" src="car4_face.png"><!-- มีปากปิดวาดในตัว -->
+      <div id="face">
+        <img id="eyesC" class="full" src="car4_eyes_closed.png">
+        <div id="eyesOpen">
+          <img class="full" src="car4_eyes_white.png">
+          <div id="pupilw"><img id="pupils" class="full" src="car4_pupils.png"></div>
+          <img class="full" src="car4_eyes_top.png"><!-- ขอบตา ทับบนตาดำ -->
+        </div>
+        <!-- ปาก 9 แบบ: ระดับเสียง 1-3 x สระ A/B/C (เต็มผืน จัดตำแหน่งมาแล้ว) -->
+        <img class="mouth full" id="m1A" src="car4_mouth_1A.png">
+        <img class="mouth full" id="m1B" src="car4_mouth_1B.png">
+        <img class="mouth full" id="m1C" src="car4_mouth_1C.png">
+        <img class="mouth full" id="m2A" src="car4_mouth_2A.png">
+        <img class="mouth full" id="m2B" src="car4_mouth_2B.png">
+        <img class="mouth full" id="m2C" src="car4_mouth_2C.png">
+        <img class="mouth full" id="m3A" src="car4_mouth_3A.png">
+        <img class="mouth full" id="m3B" src="car4_mouth_3B.png">
+        <img class="mouth full" id="m3C" src="car4_mouth_3C.png">
+      </div>
+      <img class="full" src="car4_hair.png"><!-- ผมทับโคนหู -->
+    </div>
+    <img class="full" src="car4_shirt.png"><!-- คอเสื้อทับคอ หัวขยับแล้วไม่โหว่ -->
+  </div>
+</div>
+
+<div id="bar">
+  <span id="wsState" style="color:#888">🔗 ตัวช่วย: -</span>
+  <button id="micBtn">🎤 เปิดไมค์</button>
+  <div id="meterWrap"><div id="meter"></div></div>
+  <label>ความไว <input id="sens" type="range" min="1" max="20" step="0.5"></label>
+  <span style="color:#888">พื้นหลัง:</span>
+  <div class="sw" data-bg="#00b140" style="background:#00b140"></div>
+  <div class="sw" data-bg="#0047bb" style="background:#0047bb"></div>
+  <div class="sw" data-bg="#222222" style="background:#222"></div>
+  <div class="sw" data-bg="#ffffff" style="background:#fff"></div>
+</div>
+<div id="hint">กด 🎤 เปิดไมค์แล้วพูด = ปากขยับตามเสียง (3 ระดับ สลับรูปปากเอง) · ขยับเมาส์ = หันหน้า+ตามอง · หู+หางกระดิกเอง</div>
+<div id="demoBadge">⚠ โหมดทดสอบ — ปาก/หัวขยับเอง ไม่ฟังเมาส์และไมค์<br>คลิกที่นี่เพื่อกลับโหมดใช้งานจริง</div>
+<div id="dot"></div>
+<div id="debug"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const head = $("head"), face = $("face"), tail = $("tail");
+const params = new URLSearchParams(location.search);
+// ปาก: mouthEls[ระดับ 1..3][สระ 0..2]
+const mouthEls = [1, 2, 3].map(l => ["A", "B", "C"].map(v => $("m" + l + v)));
+
+// ---------- cache-bust: บังคับโหลดรูปเวอร์ชันล่าสุดทุกครั้งที่เปิด ----------
+const VER = Date.now();
+document.querySelectorAll("#avatar img").forEach(im =>
+  im.src = im.getAttribute("src").split("?")[0] + "?v=" + VER);
+$("pupilw").style.webkitMaskImage = $("pupilw").style.maskImage =
+  `url("car4_eyes_mask.png?v=${VER}")`;
+
+// OBS Browser Source mode (auto-detected): transparent background, no UI
+const obsMode = params.has("obs") || !!window.obsstudio;
+if (obsMode) {
+  document.documentElement.style.background = "transparent";
+  document.body.style.background = "transparent";
+  $("bar").style.display = "none";
+  $("hint").style.display = "none";
+  $("dot").style.display = "block";
+  setTimeout(() => $("dot").style.display = "none", 25000);
+}
+const debugMode = params.has("debug");
+if (debugMode) $("debug").style.display = "block";
+
+// ---------- helper link (global mic + mouse via ws://127.0.0.1:8765) ----------
+let wsData = null, wsAt = -1e9;
+(function connectWS() {
+  let ws;
+  try { ws = new WebSocket("ws://127.0.0.1:8765"); } catch (e) { setTimeout(connectWS, 3000); return; }
+  ws.onmessage = e => { wsData = JSON.parse(e.data); wsAt = performance.now(); };
+  ws.onclose = () => setTimeout(connectWS, 2000);
+  ws.onerror = () => ws.close();
+})();
+const wsFresh = now => wsData && (now - wsAt) < 1200;
+
+// ---------- scale to fit ----------
+const avatar = $("avatar");
+function fit() {
+  avatar.style.transform = `scale(${Math.min(innerWidth / 1024, innerHeight / 1536)})`;
+}
+addEventListener("resize", fit); fit();
+
+// ---------- small physics + noise helpers ----------
+class Spring {
+  constructor() { this.p = 0; this.v = 0; }
+  step(target, dt, w, z) {
+    this.v += (w * w * (target - this.p) - 2 * z * w * this.v) * dt;
+    this.p += this.v * dt;
+    return this.p;
+  }
+}
+const nz = (t, a, b, c) =>
+  Math.sin(t * a) * 0.55 + Math.sin(t * b + 1.7) * 0.3 + Math.sin(t * c + 4.1) * 0.15;
+
+// ---------- mouth: 3 ระดับเสียง crossfade + สลับสระ A/B/C ตอนพูด ----------
+let vowel = 0, nextVowel = 0;
+function setMouth(v, now) {
+  v = Math.max(0, Math.min(3, v));           // 0 = หุบ (ปากวาดบนหน้า)
+  if (v > 0.35 && now >= nextVowel) {        // เปลี่ยนรูปสระเป็นจังหวะขณะพูด
+    vowel = (vowel + 1 + Math.floor(Math.random() * 2)) % 3;
+    nextVowel = now + 130 + Math.random() * 170;
+  }
+  const i = Math.floor(v), frac = v - i;
+  for (let l = 1; l <= 3; l++)
+    for (let k = 0; k < 3; k++)
+      mouthEls[l - 1][k].style.opacity =
+        (k !== vowel) ? 0 : (l === i) ? 1 : (l === i + 1) ? frac : 0;
+}
+
+// ---------- blink: instant swap + light squash lead-in ----------
+let blinkPhase = "idle", blinkStart = 0, nextBlink = performance.now() + 2000;
+let blinkDepth = 1, tClose = 90, tHold = 70, tOpen = 140;
+const easeIn = t => t * t, easeOut = t => 1 - (1 - t) * (1 - t);
+const forceBlink = parseFloat(params.get("blink"));
+function applyBlink(p) {
+  const q = p >= 0.5 ? 1 : 0;
+  const s = 1 - Math.min(p, 0.5) * 0.35;
+  $("eyesC").style.opacity = q;
+  $("eyesOpen").style.transform = `translateY(${p * 6}px) scaleY(${s})`;
+  $("eyesOpen").style.opacity = 1 - q;
+}
+function scheduleBlink(now) {
+  const half = Math.random() < 0.15;
+  blinkDepth = half ? 0.55 + Math.random() * 0.15 : 0.92 + Math.random() * 0.08;
+  tClose = 70 + Math.random() * 45;
+  tHold = 40 + Math.random() * 55;
+  tOpen = 115 + Math.random() * 85;
+  nextBlink = now + 2000 + Math.random() * 4800 + (Math.random() < 0.18 ? -1700 : 0);
+}
+function tickBlink(now) {
+  if (!isNaN(forceBlink)) { applyBlink(forceBlink); return; }
+  let p = 0;
+  if (blinkPhase === "idle" && now >= nextBlink) { blinkPhase = "closing"; blinkStart = now; }
+  if (blinkPhase === "closing") {
+    const t = (now - blinkStart) / tClose;
+    if (t >= 1) { blinkPhase = "hold"; blinkStart = now; p = 1; } else p = easeIn(t);
+  } else if (blinkPhase === "hold") {
+    p = 1;
+    if (now - blinkStart >= tHold) { blinkPhase = "opening"; blinkStart = now; }
+  } else if (blinkPhase === "opening") {
+    const t = (now - blinkStart) / tOpen;
+    if (t >= 1) { blinkPhase = "idle"; p = 0; scheduleBlink(now); }
+    else p = 1 - easeOut(t);
+  }
+  applyBlink(p * blinkDepth);
+}
+
+// ---------- mouse ----------
+let nx = 0, ny = 0;
+addEventListener("mousemove", e => {
+  nx = (e.clientX / innerWidth - 0.5) * 2;
+  ny = (e.clientY / innerHeight - 0.5) * 2;
+});
+
+// ---------- mic ----------
+let analyser = null, audioData = null, level = 0, smooth = 0, prevSmooth = 0, openness = 0;
+const sens = $("sens");
+sens.value = parseFloat(params.get("sens")) || localStorage.car4Sens || 8;
+sens.oninput = () => localStorage.car4Sens = sens.value;
+$("micBtn").onclick = async () => {
+  if (analyser) { analyser = null; $("micBtn").textContent = "🎤 เปิดไมค์"; $("micBtn").classList.remove("on"); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    const ctx = new AudioContext();
+    ctx.createMediaStreamSource(stream).connect(analyser = ctx.createAnalyser());
+    analyser.fftSize = 1024;
+    audioData = new Float32Array(analyser.fftSize);
+    $("micBtn").textContent = "🎤 ไมค์ทำงาน"; $("micBtn").classList.add("on");
+  } catch (err) { alert("เปิดไมค์ไม่ได้: " + err.message); }
+};
+function tickMic(now) {
+  if (wsFresh(now)) {
+    level = wsData.level * sens.value * 1.2;
+  } else if (analyser) {
+    analyser.getFloatTimeDomainData(audioData);
+    let sum = 0;
+    for (let i = 0; i < audioData.length; i++) sum += audioData[i] * audioData[i];
+    level = Math.sqrt(sum / audioData.length) * sens.value;
+  } else { level = 0; }
+  smooth = level > smooth ? smooth * 0.5 + level * 0.5 : smooth * 0.86 + level * 0.14;
+  $("meter").style.width = Math.min(100, smooth * 100) + "%";
+}
+
+// ---------- springs & state ----------
+const sRot = new Spring(), sX = new Spring(), sY = new Spring();
+const fRot = new Spring(), fX = new Spring(), fY = new Spring();
+const sEar = new Spring(), sTail = new Spring();
+let flickVel = { L: 0, R: 0 }, nextFlick = performance.now() + 4000, perkAt = 0;
+let tailVel = 0, nextSwish = performance.now() + 3000;
+
+const demo = params.has("demo");
+let demoT = 0;
+if (demo) {
+  const b = $("demoBadge");
+  b.style.display = "block";
+  b.style.pointerEvents = "auto";
+  b.onclick = () => location.href = location.pathname;
+}
+
+// ---------- main loop ----------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const t = now / 1000;
+
+  if (demo) {
+    demoT += dt;
+    nx = Math.sin(demoT * 0.8) * 0.85;
+    ny = Math.sin(demoT * 0.5) * 0.5;
+    smooth = Math.max(0, Math.sin(demoT * 5.5)) * (0.4 + 0.6 * Math.abs(Math.sin(demoT * 0.7)));
+    $("meter").style.width = Math.min(100, smooth * 100) + "%";
+  } else {
+    if (wsFresh(now)) {
+      nx = Math.max(-1, Math.min(1, ((wsData.mx - wsData.vx) / wsData.vw - 0.5) * 2));
+      ny = Math.max(-1, Math.min(1, ((wsData.my - wsData.vy) / wsData.vh - 0.5) * 2));
+    }
+    tickMic(now);
+  }
+  const linked = wsFresh(now);
+  $("wsState").textContent = linked ? "🔗 ตัวช่วย: เชื่อมต่อ ✓" : "🔗 ตัวช่วย: -";
+  $("dot").style.background = linked ? "#2e7d46" : "#c33";
+  if (debugMode) {
+    $("debug").textContent =
+      `obs: ${obsMode}  helper: ${linked ? "CONNECTED" : "NOT FOUND"}\n` +
+      `level: ${level.toFixed(3)}  smooth: ${smooth.toFixed(3)}  vowel: ${"ABC"[vowel]}\n` +
+      `mouse: ${nx.toFixed(2)}, ${ny.toFixed(2)}`;
+  }
+  tickBlink(now);
+
+  // ear perk + tail swish when voice starts
+  if (smooth > 0.22 && prevSmooth <= 0.22 && now > perkAt) {
+    flickVel.L += 140; flickVel.R -= 140;
+    tailVel += 90;
+    perkAt = now + 2500;
+  }
+  prevSmooth = smooth;
+
+  // mouth: gamma curve + flutter while talking (3 ระดับ)
+  const targetO = Math.pow(Math.max(0, Math.min(1, (smooth - 0.05) * 1.75)), 0.8);
+  openness += (targetO - openness) * (1 - Math.pow(targetO > openness ? 0.0001 : 0.008, dt));
+  const flutter = (Math.sin(now / 45) * Math.sin(now / 97 + 1)) * 0.07
+                  * Math.min(1, openness * 3) * Math.min(1, (1 - openness) * 3);
+  setMouth(Math.max(0, Math.min(1, openness + flutter)) * 3, now);
+
+  // head: mouse target + organic idle drift, spring with light overshoot
+  const rT = nx * 2.2 + nz(t, 0.23, 0.52, 0.89) * 0.45;
+  const xT = nx * 7 + nz(t, 0.19, 0.44, 0.83) * 2.2;
+  const yT = ny * 5 + nz(t, 0.28, 0.60, 1.10) * 1.6;
+  const hr = sRot.step(rT, dt, 6, 0.85);
+  const hx = sX.step(xT, dt, 6, 0.85);
+  const hy = sY.step(yT, dt, 6, 0.85);
+  const breath = Math.sin(t * 1.65) * 2.2;
+  head.style.transform =
+    `translate(${hx}px, ${hy + breath - openness * 3}px) rotate(${hr}deg)`;
+
+  // face features parallax: ตา+ปาก ลอยตามอีกชั้นเบา ๆ
+  const fr = fRot.step(nx * 0.5, dt, 4.2, 0.8);
+  const fx = fX.step(nx * 4.5 + nz(t, 0.17, 0.41, 0.79) * 1.0, dt, 4.2, 0.8);
+  const fy = fY.step(ny * 3.5 + nz(t, 0.26, 0.55, 1.03) * 0.8, dt, 4.2, 0.8);
+  face.style.transform = `translate(${fx}px, ${fy - openness * 1.5}px) rotate(${fr}deg)`;
+
+  // pupils: slide inside the eye-white mask (eyes lead, head lags)
+  const gx = Math.sign(nx) * Math.sqrt(Math.abs(nx));
+  const gy = Math.sign(ny) * Math.sqrt(Math.abs(ny));
+  $("pupils").style.transform = `translate(${gx * 10}px, ${gy * 5}px)`;
+
+  // ears: ตามการหมุนหัว + ลอยช้า + สะบัดสุ่มออโต้
+  const earT = hr * 1.4 + nz(t, 0.15, 0.37, 0.71) * 1.8;
+  const earP = sEar.step(earT, dt, 11, 0.35);
+  if (now >= nextFlick) {
+    flickVel[Math.random() < 0.5 ? "L" : "R"] += (Math.random() < 0.5 ? 1 : -1) * 220;
+    nextFlick = now + 3500 + Math.random() * 8000;
+  }
+  for (const s of ["L", "R"]) {
+    flickVel[s] *= Math.pow(0.0005, dt);
+    if (Math.abs(flickVel[s]) < 0.5) flickVel[s] = 0;
+  }
+  const wig = Math.sin(now / 90);
+  $("earL").style.transform = `rotate(${earP * 0.6 + flickVel.L * 0.02 * wig}deg)`;
+  $("earR").style.transform = `rotate(${earP * 0.6 + flickVel.R * 0.02 * wig}deg)`;
+
+  // tail: แกว่งช้า + ตามหัว + สะบัดแรงสุ่ม/ตอนเริ่มพูด (ออโต้)
+  const tailT = -hr * 1.0 + Math.sin(t * 0.8) * 2.8 + nz(t, 0.13, 0.31, 0.67) * 1.2;
+  const tailP = sTail.step(tailT, dt, 5, 0.5);
+  if (now >= nextSwish) {
+    tailVel += (Math.random() < 0.5 ? 1 : -1) * 160;
+    nextSwish = now + 5000 + Math.random() * 9000;
+  }
+  tailVel *= Math.pow(0.002, dt);
+  if (Math.abs(tailVel) < 0.5) tailVel = 0;
+  tail.style.transform = `rotate(${tailP + tailVel * 0.03 * Math.sin(now / 130)}deg)`;
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ---------- toolbar ----------
+if (!obsMode) document.body.style.background = localStorage.car4Bg || "#222222";
+document.querySelectorAll(".sw").forEach(el => {
+  el.onclick = () => { document.body.style.background = el.dataset.bg; localStorage.car4Bg = el.dataset.bg; };
+});
+let barTimer = 0;
+function pokeBar() {
+  $("bar").classList.remove("hidden");
+  clearTimeout(barTimer);
+  barTimer = setTimeout(() => $("bar").classList.add("hidden"), 3500);
+}
+addEventListener("mousemove", e => { if (e.clientY > innerHeight - 120) pokeBar(); });
+pokeBar();
+setTimeout(() => $("hint").style.opacity = 0, 9000);
+</script>
+</body>
+</html>

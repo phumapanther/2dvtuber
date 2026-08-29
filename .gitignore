@@ -1,0 +1,7 @@
+node_modules/
+__pycache__/
+.env
+*.log
+Thumbs.db
+desktop.ini
+2D_Craracter_Chibi/Model_PNG_Tuber
