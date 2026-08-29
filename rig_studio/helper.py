@@ -61,10 +61,13 @@ def poll_keys():
 
 CLIENTS = set()
 DONATE = []  # คิวแจ้งเตือนโดเนทจากสะพาน HTTP
+FX = []      # คิวปาของ (tomato/heart/rock) จากสะพาน HTTP
+FX_KINDS = {"tomato", "heart", "rock"}
 
 # ---- สะพานคำสั่ง HTTP (พอร์ต 8766): ให้ Stream Deck / Streamer.bot / สคริปต์อื่นสั่งอวตารได้ ----
 #   http://127.0.0.1:8766/emote?n=3
 #   http://127.0.0.1:8766/donate?name=สมชาย&amount=100&msg=สู้ๆ
+#   http://127.0.0.1:8766/fx?type=tomato   (หรือ heart / rock — ผูกกับคำสั่งแชท เช่น !throw ใน Streamer.bot)
 def start_http_bridge():
     class H(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
@@ -84,10 +87,18 @@ def start_http_bridge():
                                "amount": q.get("amount", [""])[0],
                                "msg": q.get("msg", [""])[0]})
                 body = b"ok"
+            elif u.path == "/fx":
+                kind = q.get("type", [""])[0]
+                if kind in FX_KINDS:
+                    FX.append(kind)
+                    body = b"ok"
+                else:
+                    body = ("!! /fx?type= ต้องเป็น tomato / heart / rock\n").encode("utf-8")
             else:
                 body = ("PhumaPanther bridge:\n"
                         "/emote?n=1-9\n"
-                        "/donate?name=..&amount=..&msg=..\n").encode("utf-8")
+                        "/donate?name=..&amount=..&msg=..\n"
+                        "/fx?type=tomato|heart|rock\n").encode("utf-8")
             self.send_response(200)
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Content-Type", "text/plain; charset=utf-8")
@@ -122,6 +133,8 @@ async def broadcaster():
                  "emote": emote_hot}
         if DONATE:
             msg_d["donate"] = DONATE.pop(0)
+        if FX:
+            msg_d["fx"] = FX.pop(0)
         msg = json.dumps(msg_d)
         typed = 0
         emote_hot = 0
@@ -162,6 +175,7 @@ async def main():
         return
     print("ตัวช่วยทำงานแล้ว (ws://127.0.0.1:8765) — เปิดค้างไว้ตอนสตรีม")
     print("คีย์ลัดอีโมตทั้งเครื่อง: Ctrl+Alt+1..9 (พยักหน้า/ส่ายหน้า/ตกใจ/เอียงคอ/เด้ง/หมุน/สั่น/หลับ/ตื่นเต้น)")
+    print("ปาของจากแชท/Stream Deck: http://127.0.0.1:8766/fx?type=tomato|heart|rock")
     start_http_bridge()
     print("พูดใส่ไมค์ดู: ต้องมีแถบ 'เสียง: ###' วิ่งขึ้นมา / ตอน OBS โหลดโมเดล ต้องขึ้น 'โมเดลเชื่อมต่อแล้ว ✓'")
     await broadcaster()

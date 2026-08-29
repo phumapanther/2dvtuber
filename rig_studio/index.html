@@ -12,6 +12,8 @@
   .grp { position: absolute; left: 0; top: 0; width: 1024px; height: 1536px; will-change: transform; }
   .pupilw { -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
   .leaf { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
+  .thrown { position: absolute; left: 0; top: 0; line-height: 1; pointer-events: none;
+            will-change: transform, opacity; filter: drop-shadow(0 4px 6px rgba(0,0,0,.35)); }
 
   #bar { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
          display: flex; gap: 10px; align-items: center; padding: 8px 14px;
@@ -140,6 +142,12 @@
   <b class="sec">🎬 อัดคลิป</b>
   <button id="recBtn" title="เลือกแชร์ 'แท็บ/หน้าต่างนี้' แล้วไฟล์ .webm จะโหลดให้เมื่อกดหยุด">🎬 อัดวิดีโอ (WebM)</button>
   <button id="gifBtn" title="จับภาพ 4 วินาทีเป็นไฟล์ GIF">🖼 GIF 4 วินาที</button>
+  <b class="sec">🎯 ปาของ</b>
+  <div style="display:flex; gap:6px">
+    <button id="throwTomatoBtn" title="คีย์ลัด: T" style="width:auto">🍅</button>
+    <button id="throwHeartBtn" title="คีย์ลัด: H" style="width:auto">💖</button>
+    <button id="throwRockBtn" title="คีย์ลัด: R" style="width:auto">🪨</button>
+  </div>
   <b class="sec">🎁 แจ้งเตือนโดเนท</b>
   <button id="donateTestBtn">🎁 ทดสอบแจ้งเตือน</button>
   <b class="sec">📺 OBS / เซฟค่า</b>
@@ -150,7 +158,9 @@
   <button id="editBtn">✏️ จัดตำแหน่ง / แต่งอวตาร</button>
   <small>เสียงอีโมต: วางไฟล์ .mp3 ในโฟลเดอร์ sounds/ (ชื่อ emote_1.mp3 … emote_9.mp3, donate.mp3)<br>
   รูปอีโมต: วาง emote_1.png … emote_9.png ในโฟลเดอร์อวตารตัวนั้น (แคนวาส 1024x1536)<br>
-  สั่งจากโปรแกรมอื่น: http://127.0.0.1:8766/emote?n=3 (ต้องเปิดตัวช่วย OBS)</small>
+  ปาของ: ดีฟอลต์เป็นอีโมจิ ใช้ได้ทันที · อยากเปลี่ยนรูปเอง ใส่ throwables ใน avatar.js<br>
+  เสียงปาของ (ถ้ามี): sounds/throw_tomato.mp3 · throw_heart.mp3 · throw_rock.mp3<br>
+  สั่งจากโปรแกรมอื่น: http://127.0.0.1:8766/emote?n=3 · /fx?type=tomato (ต้องเปิดตัวช่วย OBS)</small>
 </div>
 <div id="donateBox">🎁 <span id="dnName"></span> <span id="dnAmt"></span><small id="dnMsg"></small></div>
 <div id="parts"></div>
@@ -435,6 +445,7 @@ let wsData = null, wsAt = -1e9;
     if (d.mb && !wsMb) clickFlick();       // คลิกเมาส์ = หูสะบัด
     wsMb = !!d.mb;
     if (d.donate) showDonate(d.donate);    // จากสะพาน HTTP 8766 (Streamer.bot / Stream Deck)
+    if (d.fx) spawnThrow(d.fx);            // /fx?type=tomato — ปาของจากแชท/Stream Deck
   };
   ws.onclose = () => setTimeout(connectWS, 2000);
   ws.onerror = () => ws.close();
@@ -649,7 +660,76 @@ const sRot = new Spring(), sX = new Spring(), sY = new Spring();
 const fRot = new Spring(), fX = new Spring(), fY = new Spring();
 const swX = new Spring(), swR = new Spring();
 const sEar = new Spring(), sTail = new Spring();
+const sImpX = new Spring(), sImpR = new Spring(); // แรงสะเทือนจากของที่ปามาชน
 let nextFlick = performance.now() + 4000, nextSwish = performance.now() + 3000, perkAt = 0;
+
+// ---------- ปาของ: ลอยจากขอบจอเข้าหาโมเดล ชนแล้วเด้ง/แตก + ส่งแรงสะเทือนทั้งตัว ----------
+// อยากใช้รูปเอง (แทนอีโมจิ): เติม def.throwables = {tomato:"ไฟล์.png", heart:"...", rock:"..."} ใน avatar.js
+const THROW_KIND = {
+  tomato: { emoji: "🍅", size: 92, sound: "throw_tomato.mp3" },
+  heart: { emoji: "💖", size: 84, sound: "throw_heart.mp3" },
+  rock: { emoji: "🪨", size: 88, sound: "throw_rock.mp3" },
+};
+const throwLayer = document.createElement("div");
+throwLayer.className = "grp"; throwLayer.id = "throwLayer";
+avatar.insertBefore(throwLayer, zzz); // เหนือตัวโมเดล ใต้ Zzz/อีโมต
+const throws = [];
+const THROW_TARGET = { x: 512, y: 660 }; // จุดชนโดยประมาณ (ตัว/หน้าอก) — ใช้ค่าเดียวพอสำหรับทุกอวตาร
+function spawnThrow(kind) {
+  const cfg = THROW_KIND[kind]; if (!cfg) return;
+  const edge = Math.floor(Math.random() * 3); // 0=ซ้าย 1=ขวา 2=บน (ไม่เอาล่าง กันโผล่ทะลุพื้น)
+  const from = edge === 0 ? { x: -140, y: 200 + Math.random() * 900 }
+    : edge === 1 ? { x: 1164, y: 200 + Math.random() * 900 }
+    : { x: 80 + Math.random() * 864, y: -140 };
+  const custom = def.throwables && def.throwables[kind];
+  const el = document.createElement(custom ? "img" : "div");
+  el.className = "thrown";
+  if (custom) { el.src = DIR + custom + "?v=" + VER; el.style.width = cfg.size + "px"; el.onerror = () => {}; }
+  else { el.textContent = cfg.emoji; el.style.fontSize = cfg.size + "px"; }
+  throwLayer.append(el);
+  throws.push({ el, kind, x: from.x, y: from.y, from, born: performance.now(), dur: 480 + Math.random() * 140, rot: Math.random() * 360, hit: false });
+}
+window.throwFx = spawnThrow; // console / อนาคตต่อยอด
+function onThrowHit(T) {
+  const dirSign = T.from.x <= THROW_TARGET.x ? 1 : -1; // ชนจากซ้าย → กระเด็น/เอียงไปทางขวา
+  T.dirSign = dirSign;
+  const power = T.kind === "rock" ? 1.35 : T.kind === "tomato" ? 1 : 0.55;
+  sImpX.v += dirSign * 320 * power;
+  sImpR.v += dirSign * 6 * power;
+  wiggleNodes.forEach((n, i) => n.v += (i % 2 ? -1 : 1) * 200 * power);
+  pendulumNodes.forEach(n => n.v += 140 * power);
+  playSound(THROW_KIND[T.kind].sound);
+  lastActive = performance.now();
+}
+function tickThrows(now, dt) {
+  for (let i = throws.length - 1; i >= 0; i--) {
+    const T = throws[i];
+    const q = Math.min(1, (now - T.born) / T.dur);
+    if (!T.hit) {
+      const ease = q * q * (3 - 2 * q); // smoothstep — วิ่งเข้าเนียน ไม่ใช่เส้นตรงแข็ง
+      T.x = T.from.x + (THROW_TARGET.x - T.from.x) * ease;
+      T.y = T.from.y + (THROW_TARGET.y - T.from.y) * ease - Math.sin(q * Math.PI) * 70; // โค้งแรงเหวี่ยงนิดหน่อย
+      T.rot += 420 * dt;
+      T.el.style.opacity = Math.min(1, q * 6);
+      T.el.style.transform = `translate(${T.x}px, ${T.y}px) rotate(${T.rot}deg)`;
+      if (q >= 1) { T.hit = true; T.hitAt = now; onThrowHit(T); }
+    } else {
+      const ht = Math.min(1, (now - T.hitAt) / 260);
+      if (T.kind === "rock") { // เด้งกระเด็นแล้วร่วง
+        T.y += 380 * dt; T.rot += 420 * dt;
+        T.el.style.transform = `translate(${T.x + ht * 90 * T.dirSign}px, ${T.y}px) rotate(${T.rot}deg)`;
+        T.el.style.opacity = 1 - ht;
+      } else if (T.kind === "heart") { // ลอยขึ้นแล้วจาง
+        T.el.style.transform = `translate(${T.x}px, ${T.y - ht * 60}px) scale(${1 + ht * 0.4}) rotate(${T.rot}deg)`;
+        T.el.style.opacity = 1 - ht;
+      } else { // แตกแบน ๆ (มะเขือเทศ)
+        T.el.style.transform = `translate(${T.x}px, ${T.y}px) scale(${1 + ht * 0.6}, ${1 - ht * 0.5}) rotate(${T.rot}deg)`;
+        T.el.style.opacity = 1 - ht * 1.4;
+      }
+      if (ht >= 1) { T.el.remove(); throws.splice(i, 1); }
+    }
+  }
+}
 
 // ---------- interactive: อีโมต / หลับออโต้ / ลมเมาส์ / จังหวะพิมพ์ / โยกตามเพลง / กล้อง ----------
 let emoteId = 0, emoteT0 = 0, nextBurst = 0, eyeWide = 1;
@@ -703,6 +783,9 @@ addEventListener("keydown", e => {
   if (editMode || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || e.repeat) return;
   lastActive = performance.now();
   if (e.key >= "1" && e.key <= "9") emote(+e.key);
+  else if (e.key === "t" || e.key === "T") spawnThrow("tomato");
+  else if (e.key === "h" || e.key === "H") spawnThrow("heart");
+  else if (e.key === "r" || e.key === "R") spawnThrow("rock");
   else typedPulse++;
 });
 addEventListener("mousedown", e => {
@@ -897,6 +980,9 @@ function showDonate(d) {
 }
 window.donate = (name, amount, msg) => showDonate({ name, amount, msg });
 $("donateTestBtn").onclick = () => showDonate({ name: "ผู้ชมใจดี", amount: "100 บาท", msg: "สู้ๆ นะ!" });
+$("throwTomatoBtn").onclick = () => spawnThrow("tomato");
+$("throwHeartBtn").onclick = () => spawnThrow("heart");
+$("throwRockBtn").onclick = () => spawnThrow("rock");
 
 // ---------- อัดคลิป: WebM (เริ่ม/หยุด) + GIF 4 วิ — เลือกแชร์ "แท็บ/หน้าต่างนี้" ----------
 let recorder = null;
@@ -1014,13 +1100,16 @@ function loop(now) {
   }
   tickBlink(now);
   tickLeaves(now, dt);
+  tickThrows(now, dt);
 
-  // เริ่มพูด → หูสะบัด หางสะบัด (+ใบไม้ร่วงพรูถ้ามี)
-  if (smooth > 0.22 && prevSmooth <= 0.22 && now > perkAt) {
-    wiggleNodes.forEach((n, i) => n.v += i % 2 ? -140 : 140);
-    pendulumNodes.forEach(n => n.v += 90);
+  // พูดดัง/ตะโกน → หู/หาง/ผมสั่นแรงตามจังหวะน้ำเสียงจริง (ยิ่งเสียงพุ่งแรง+ดัง ยิ่งเด้งแรง)
+  const onset = Math.max(0, smooth - prevSmooth);
+  if (onset > 0.03 && now > perkAt) {
+    const kick = Math.min(3, onset * 9) * (60 + smooth * 220);
+    wiggleNodes.forEach((n, i) => n.v += (i % 2 ? -1 : 1) * kick);
+    pendulumNodes.forEach(n => n.v += kick * 0.6);
     if (def.leaves) for (let k = 0; k < 3 && leaves.length < 14; k++) spawnLeaf(now);
-    perkAt = now + 2500;
+    perkAt = now + 120; // กันสั่นถี่ยิบทุกเฟรม แต่ไม่ล็อกจังหวะเหมือนเดิม (2.5 วิ) — ตะโกนรัวได้
   }
   prevSmooth = smooth;
 
@@ -1099,7 +1188,7 @@ function loop(now) {
   // ท่าทางตอนว่าง: เบื่อ → เหลือบมอง/เอียงคอ/หูสะบัด (ก่อนถึงจุดหลับที่ 45 วิ)
   const idleFor = now - lastActive;
   if (!editMode && !emoteId && !gId && sleepFactor < 0.3 && idleFor > 8000 && now >= nextGesture) {
-    gId = 1 + Math.floor(Math.random() * 3);
+    gId = 1 + Math.floor(Math.random() * 5); // 1-3 เดิม + 4 หาว + 5 ถอนหายใจ
     gT0 = now;
     gRx = (Math.random() * 2 - 1) * 0.8 * lk;
     gRy = (Math.random() * 1.1 - 0.55) * lk;
@@ -1117,14 +1206,29 @@ function loop(now) {
     } else if (gId === 2) {                                     // เอียงคอนิด ๆ
       eRot += 4 * Math.sin(Math.PI * Math.min(1, gt / 2.2)) * Math.sign(gRx || 1);
       if (gt > 2.2) gId = 0;
+    } else if (gId === 4) {                                     // หาว: ปากอ้ากว้าง + หัวเงยหลัง + ตาหรี่
+      const env = Math.sin(Math.PI * Math.min(1, gt / 1.8));
+      setMouth01(Math.max(openness, env), now); // ทับค่าไมค์ของเฟรมนี้ชั่วคราว
+      eRot += -3 * env; wy2 -= 10 * env; eyeWide = 1 - 0.3 * env;
+      if (gt > 1.8) gId = 0;
+    } else if (gId === 5) {                                     // ถอนหายใจ: หัวลู่ลงช้า ๆ + ปากแง้มเบา
+      const env = Math.sin(Math.PI * Math.min(1, gt / 2.4));
+      setMouth01(Math.max(openness, env * 0.35), now);
+      wy2 += 14 * env; eRot += 1.5 * env;
+      if (gt > 2.4) gId = 0;
     } else if (gt > 0.5) gId = 0;                               // หูสะบัด (แรงกระตุ้นจ่ายไปแล้ว)
   }
 
+  // แรงสะเทือนจากของที่ปามาชน (สปริงหน่วงกลับ 0 เอง — ไม่ต้องมีสถานะเปิด/ปิด)
+  const impX = sImpX.step(0, dt, 7, 0.3);
+  const impR = sImpR.step(0, dt, 7, 0.3);
+
   // ริกที่หัวนิ่ง (ไม่มีชิ้น motion=head เช่น car5): พยัก/ส่าย ให้ทั้งตัวขยับแทน
-  const wfx = wx2 + (hasHead ? 0 : eHX * 0.45);
+  const wfx = wx2 + (hasHead ? 0 : eHX * 0.45) + impX;
   const wfy = wy2 - kb + (hasHead ? 0 : eHY * 0.45);
-  wrap.style.transform = (wfx || wfy || wr2)
-    ? `translate(${wfx}px, ${wfy}px) rotate(${wr2}deg)` : "";
+  const wr3 = wr2 + impR;
+  wrap.style.transform = (wfx || wfy || wr3)
+    ? `translate(${wfx}px, ${wfy}px) rotate(${wr3}deg)` : "";
 
   // อินพุตรวม: จับหน้า > กล้องจับขยับ > เมาส์ — แล้วบวกอีโมต/หลับ/จังหวะ
   const faceFresh = faceOn && now - faceAt < 800;
