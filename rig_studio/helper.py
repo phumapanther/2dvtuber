@@ -9,6 +9,7 @@ import ctypes
 import ctypes.wintypes
 import http.server
 import json
+import os
 import sys
 import threading
 import time
@@ -20,6 +21,23 @@ import websockets
 
 LEVEL = 0.0
 LAST_PRINT = 0.0
+
+# ---- อ่าน rig_studio/.env (STREAMLABS_SOCKET_TOKEN=..) ถ้ามี — ใช้เชื่อม Streamlabs Socket API ----
+def load_env():
+    env = {}
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    env[k.strip()] = v.strip()
+    except FileNotFoundError:
+        pass
+    return env
+
+STREAMLABS_TOKEN = load_env().get("STREAMLABS_SOCKET_TOKEN", "")
 
 def audio_cb(indata, frames, t, status):
     global LEVEL
@@ -116,6 +134,11 @@ def start_http_bridge():
 async def handler(ws):
     CLIENTS.add(ws)
     print(">> โมเดลเชื่อมต่อแล้ว ✓  (ทั้งหมด %d)" % len(CLIENTS))
+    if STREAMLABS_TOKEN:
+        try:
+            await ws.send(json.dumps({"slToken": STREAMLABS_TOKEN}))
+        except Exception:
+            pass
     try:
         await ws.wait_closed()
     finally:
@@ -174,6 +197,10 @@ async def main():
         print("!! เปิดพอร์ต 8765 ไม่ได้ — อาจมีตัวช่วยเปิดซ้ำอยู่แล้ว:", e)
         return
     print("ตัวช่วยทำงานแล้ว (ws://127.0.0.1:8765) — เปิดค้างไว้ตอนสตรีม")
+    if STREAMLABS_TOKEN:
+        print("เชื่อม Streamlabs Socket API แล้ว (จะอ่านทิป/Superchat ให้อัตโนมัติถ้าเปิด 🗣️ ในเมนู)")
+    else:
+        print("ไม่พบ STREAMLABS_SOCKET_TOKEN ใน rig_studio/.env — จะไม่อ่านทิป/Superchat อัตโนมัติ")
     print("คีย์ลัดอีโมตทั้งเครื่อง: Ctrl+Alt+1..9 (พยักหน้า/ส่ายหน้า/ตกใจ/เอียงคอ/เด้ง/หมุน/สั่น/หลับ/ตื่นเต้น)")
     print("ปาของจากแชท/Stream Deck: http://127.0.0.1:8766/fx?type=tomato|heart|rock")
     start_http_bridge()

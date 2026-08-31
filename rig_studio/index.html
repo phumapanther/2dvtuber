@@ -150,6 +150,7 @@
   </div>
   <b class="sec">🎁 แจ้งเตือนโดเนท</b>
   <button id="donateTestBtn">🎁 ทดสอบแจ้งเตือน</button>
+  <button id="ttsBtn" title="อ่านข้อความทิป/Superchat ออกเสียง (ต้องเปิดตัวช่วย OBS + ตั้งโทเคนใน .env)">🗣️ อ่านข้อความทิป/Superchat</button>
   <b class="sec">📺 OBS / เซฟค่า</b>
   <button id="obsLinkBtn">📋 ก็อปลิงก์สำหรับ OBS</button>
   <button id="saveFileBtn">📁 เซฟค่าลงโฟลเดอร์อวตาร</button>
@@ -446,6 +447,7 @@ let wsData = null, wsAt = -1e9;
     wsMb = !!d.mb;
     if (d.donate) showDonate(d.donate);    // จากสะพาน HTTP 8766 (Streamer.bot / Stream Deck)
     if (d.fx) spawnThrow(d.fx);            // /fx?type=tomato — ปาของจากแชท/Stream Deck
+    if (d.slToken) connectStreamlabs(d.slToken); // เชื่อม Streamlabs Socket API ครั้งเดียวตอนต่อติด
   };
   ws.onclose = () => setTimeout(connectWS, 2000);
   ws.onerror = () => ws.close();
@@ -956,6 +958,53 @@ for (let i = 1; i <= 9; i++) {
   im.onerror = () => {}; // ไม่มีไฟล์ = ข้าม (ใส่ทีหลังได้ทันที)
 }
 
+// ---------- อ่านข้อความทิป/Superchat ออกเสียง (Web Speech API — ออฟไลน์ ใช้เสียงที่ระบบมี) ----------
+let ttsOn = (localStorage.studioTts ?? "1") === "1";
+$("ttsBtn").classList.toggle("on", ttsOn);
+$("ttsBtn").onclick = () => {
+  ttsOn = !ttsOn; localStorage.studioTts = ttsOn ? "1" : "0";
+  $("ttsBtn").classList.toggle("on", ttsOn);
+};
+// เบราว์เซอร์บางตัว (โดยเฉพาะ Chrome) โหลดรายชื่อเสียงพูดแบบ async — ถ้าเรียก speak() ก่อนโหลดเสร็จ
+// บางครั้งจะเงียบไปเลยโดยไม่ error เลยต้องดักโหลดไว้ล่วงหน้า + reset เครื่องยนต์พูดตอนเปิดหน้า (บั๊กเก่าของ Chrome)
+let ttsVoices = [];
+function refreshVoices() { ttsVoices = speechSynthesis.getVoices(); }
+if (window.speechSynthesis) {
+  refreshVoices();
+  speechSynthesis.onvoiceschanged = refreshVoices;
+  speechSynthesis.cancel(); // เคลียร์สถานะค้างจากโหลดหน้าใหม่
+}
+function speakMsg(text) {
+  if (!ttsOn || !text || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  const th = ttsVoices.find(v => v.lang && v.lang.startsWith("th"));
+  if (th) u.voice = th;
+  u.lang = th ? th.lang : "th-TH";
+  u.rate = 1.05;
+  u.onerror = e => console.warn("อ่านออกเสียงไม่สำเร็จ:", e.error);
+  speechSynthesis.speak(u); // คิวเข้าอัตโนมัติถ้าพูดซ้อนกันหลายอัน ไม่ต้อง cancel ของเดิม
+}
+
+// ---------- Streamlabs Socket API: ทิปจริง/Superchat จริง (ต้องเปิดตัวช่วย OBS + ตั้ง STREAMLABS_SOCKET_TOKEN ใน rig_studio/.env) ----------
+let slConnected = false;
+function connectStreamlabs(token) {
+  if (slConnected) return;
+  slConnected = true;
+  const s = document.createElement("script");
+  s.src = "vendor/socket.io.min.js";
+  s.onload = () => {
+    const sl = io(`https://sockets.streamlabs.com?token=${token}`, { transports: ["websocket"] });
+    sl.on("event", ev => {
+      if (!ev.for && ev.type === "donation") {          // ทิปทั่วไป (Streamlabs/Twitch/PayPal ฯลฯ)
+        (ev.message || []).forEach(m => showDonate({ name: m.name, amount: m.formatted_amount, msg: m.message }));
+      } else if (ev.for === "youtube_account" && ev.type === "superchat") { // YouTube Super Chat (field ชื่อข้อความคือ comment ไม่ใช่ message)
+        (ev.message || []).forEach(m => showDonate({ name: m.name, amount: m.displayString, msg: m.comment }));
+      }
+    });
+  };
+  document.head.append(s);
+}
+
 // ---------- แจ้งเตือนโดเนท: window.donate(ชื่อ, จำนวน, ข้อความ) หรือยิง HTTP ผ่านตัวช่วย ----------
 function showDonate(d) {
   $("dnName").textContent = d.name || "ผู้ใจดี";
@@ -964,6 +1013,7 @@ function showDonate(d) {
   const bn = $("donateBox");
   bn.classList.remove("show"); void bn.offsetWidth; bn.classList.add("show");
   playSound("donate.mp3");
+  speakMsg(d.msg);
   emote(9); // ตื่นเต้นสุด ๆ
   for (let i = 0; i < 24; i++) {
     const p = document.createElement("i");
