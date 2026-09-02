@@ -10,7 +10,8 @@
   #avatar img { position: absolute; pointer-events: none; user-select: none; }
   .full { left: 0; top: 0; width: 1024px; height: 1536px; }
   .grp { position: absolute; left: 0; top: 0; width: 1024px; height: 1536px; will-change: transform; }
-  .pupilw { -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+  /* will-change:auto — ไม่ให้ชั้น mask แยกเลเยอร์ GPU เอง (mask + ลูกที่ transform ทุกเฟรม เคยทำตาดำหายในบางเครื่อง/OBS) */
+  .pupilw { -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; will-change: auto; }
   .leaf { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
   .thrown { position: absolute; left: 0; top: 0; line-height: 1; pointer-events: none;
             will-change: transform, opacity; filter: drop-shadow(0 4px 6px rgba(0,0,0,.35)); }
@@ -101,6 +102,11 @@
   }
   /* ระหว่างจัดตำแหน่ง ปิด mask ตาชั่วคราว — เห็นตาดำที่หลุดนอกกรอบแล้วลากกลับได้ */
   body.editing .pupilw { -webkit-mask-image: none !important; mask-image: none !important; }
+  /* โหมด canvas (เปิดแบบ file://): ตาดำจริงวาดลง canvas, รูป img ซ่อนไว้ — ตอนจัดตำแหน่งสลับกลับมาโชว์ img ให้ลากได้ */
+  .pupilcv { position: absolute; left: 0; top: 0; pointer-events: none; }
+  .pupilw.cv > img { visibility: hidden; }
+  body.editing .pupilw.cv > img { visibility: visible; }
+  body.editing .pupilcv { display: none; }
 </style>
 </head>
 <body>
@@ -161,7 +167,8 @@
   รูปอีโมต: วาง emote_1.png … emote_9.png ในโฟลเดอร์อวตารตัวนั้น (แคนวาส 1024x1536)<br>
   ปาของ: ดีฟอลต์เป็นอีโมจิ ใช้ได้ทันที · อยากเปลี่ยนรูปเอง ใส่ throwables ใน avatar.js<br>
   เสียงปาของ (ถ้ามี): sounds/throw_tomato.mp3 · throw_heart.mp3 · throw_rock.mp3<br>
-  สั่งจากโปรแกรมอื่น: http://127.0.0.1:8766/emote?n=3 · /fx?type=tomato (ต้องเปิดตัวช่วย OBS)</small>
+  สั่งจากโปรแกรมอื่น: http://127.0.0.1:8766/emote?n=3 · /fx?type=tomato (ต้องเปิดตัวช่วย OBS)<br>
+  🔗 เปิดตัวช่วย OBS ค้างไว้ = สิ่งที่กดในหน้านี้ (อีโมต/ปาของ/โดเนท/เปลี่ยนอวตาร) จะไปโชว์ใน OBS ด้วย</small>
 </div>
 <div id="donateBox">🎁 <span id="dnName"></span> <span id="dnAmt"></span><small id="dnMsg"></small></div>
 <div id="parts"></div>
@@ -235,8 +242,10 @@ $("avatarSel").onchange = () => {
     newAvatarWizard();
     return;
   }
-  localStorage.studioAvatar = $("avatarSel").value;
-  location.search = "?avatar=" + $("avatarSel").value; // reload — สภาพหน้าตรงกับอวตารใหม่เสมอ
+  const id = $("avatarSel").value;
+  localStorage.studioAvatar = id;
+  tell({ avatar: id }); // OBS ที่ต่อตัวช่วยอยู่จะสลับตาม
+  setTimeout(() => location.search = "?avatar=" + id, 150); // reload — สภาพหน้าตรงกับอวตารใหม่เสมอ (รอให้ส่งก่อน)
 };
 
 // ---------- วิซาร์ดสร้างอวตารใหม่: เขียนโฟลเดอร์+ไฟล์ให้เองผ่าน File System Access ----------
@@ -342,6 +351,42 @@ const avatar = $("avatar");
 const partEls = {}, elDefault = new Map(), groupDefs = [];
 const CONFIG_PARTS = new Set(), CONFIG_ANIMATED = new Set();
 const E = {}; // ref ชิ้นพิเศษ: eyesOpen, eyesC, pupils, mouth*, leaves
+// mask ตาดำ: ถ้ารูป mask โหลดไม่ขึ้น เบราว์เซอร์จะซ่อนตาดำทั้งชิ้น (มองว่าถูกบังหมด) — โหลดรูปให้แน่ก่อนค่อยใส่ mask,
+// พลาดก็ลองใหม่ พลาดซ้ำก็ถอด mask ทิ้ง (ตาดำโผล่เกินตาขาวนิดหน่อย ยังดีกว่าหายทั้งคู่)
+let pupilMaskState = "loading", pupilCanvas = null, pupilMaskImg = null;
+function drawPupilCanvas(dx, dy) {
+  const el = E.pupils, c = pupilCanvas.getContext("2d");
+  c.globalCompositeOperation = "source-over";
+  c.clearRect(0, 0, 1024, 1536);
+  if (!el.complete || !el.naturalWidth || el.style.visibility === "hidden") return;
+  // offsetLeft/Top = left/top + margin จาก editor; width/height = ขนาดที่เรนเดอร์จริง
+  c.drawImage(el, el.offsetLeft + dx, el.offsetTop + dy, el.width, el.height);
+  c.globalCompositeOperation = "destination-in";
+  c.drawImage(pupilMaskImg, 0, 0, 1024, 1536);
+}
+function setPupilMask(w, url, tries = 0) {
+  const src = url + "?v=" + VER + (tries ? "&r=" + tries : "");
+  const im = new Image();
+  im.onload = () => {
+    // เปิดแบบ file:// — Chrome/OBS ดึงรูป mask แบบ CORS แล้วบล็อกไฟล์โลคอล (คนละ origin) mask จึง "บังหมด" ตาดำหายทั้งชิ้น
+    // แต่ drawImage ลง canvas จากไฟล์โลคอลยังทำได้ → วาดตาดำ + ตัดด้วย mask บน canvas แทน
+    if (location.protocol === "file:") {
+      pupilMaskImg = im;
+      pupilCanvas = document.createElement("canvas");
+      pupilCanvas.width = 1024; pupilCanvas.height = 1536; pupilCanvas.className = "pupilcv";
+      w.classList.add("cv"); w.append(pupilCanvas);
+      pupilMaskState = "canvas (file://)";
+      return;
+    }
+    w.style.webkitMaskImage = w.style.maskImage = `url("${src}")`; pupilMaskState = "ok";
+  };
+  im.onerror = () => {
+    if (tries < 2) { setTimeout(() => setPupilMask(w, url, tries + 1), 800); return; }
+    w.style.webkitMaskImage = w.style.maskImage = "none"; pupilMaskState = "FAILED (no mask)";
+    console.warn("โหลดรูป mask ตาดำไม่ได้:", url);
+  };
+  im.src = src;
+}
 
 function buildMouth(parent) {
   const m = def.mouth;
@@ -403,7 +448,7 @@ function build(nodes, parent) {
       E.pupils = el; // ขนาดตามคอนฟิก (pos/w) หรือ .full — ห้ามบังคับเต็มแคนวาส: อาร์ตตาดำบางตัวมาบนแคนวาสใหญ่กว่า
       const w = document.createElement("div");
       w.className = "grp pupilw";
-      if (def.pupils) w.style.webkitMaskImage = w.style.maskImage = `url("${DIR + def.pupils.mask}?v=${VER}")`;
+      if (def.pupils) setPupilMask(w, DIR + def.pupils.mask);
       w.append(el); mount = w;
     }
     parent.append(mount);
@@ -434,19 +479,25 @@ const debugMode = params.has("debug");
 if (debugMode) $("debug").style.display = "block";
 
 // ---------- helper link (ไมค์+เมาส์ทั้งเครื่อง ผ่าน ws://127.0.0.1:8765) ----------
-let wsData = null, wsAt = -1e9;
+let wsData = null, wsAt = -1e9, ws = null;
+// ส่งการกระทำในหน้านี้ (อีโมต/ปาของ/โดเนท/เปลี่ยนอวตาร) ผ่านตัวช่วยไปยังหน้าอื่นที่ต่ออยู่ เช่น OBS
+const tell = obj => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); };
 (function connectWS() {
-  let ws;
   try { ws = new WebSocket("ws://127.0.0.1:8765"); } catch (e) { setTimeout(connectWS, 3000); return; }
   ws.onmessage = e => {
     const d = JSON.parse(e.data);
     wsData = d; wsAt = performance.now();
-    if (d.emote) emote(d.emote);          // Ctrl+Alt+1..9 จากทั้งเครื่อง
+    if (d.emote) emote(d.emote, true);    // Ctrl+Alt+1..9 จากทั้งเครื่อง / กดในหน้าควบคุม
     if (d.keys) typedPulse += d.keys;      // จังหวะพิมพ์ทั้งเครื่อง
     if (d.mb && !wsMb) clickFlick();       // คลิกเมาส์ = หูสะบัด
     wsMb = !!d.mb;
-    if (d.donate) showDonate(d.donate);    // จากสะพาน HTTP 8766 (Streamer.bot / Stream Deck)
-    if (d.fx) spawnThrow(d.fx);            // /fx?type=tomato — ปาของจากแชท/Stream Deck
+    if (d.donate) showDonate(d.donate, true); // จากสะพาน HTTP 8766 (Streamer.bot / Stream Deck)
+    if (d.fx) spawnThrow(d.fx, true);      // /fx?type=tomato — ปาของจากแชท/Stream Deck
+    if (d.avatar && obsMode && d.avatar !== AV) { // เปลี่ยนอวตารในหน้าควบคุม → OBS โหลดตัวใหม่ตาม
+      const u = new URL(location); u.searchParams.set("avatar", d.avatar);
+      u.searchParams.delete("layout"); // layout ในลิงก์เป็นของตัวเก่า — ให้ตัวใหม่ใช้ layout.js ของตัวเอง
+      location.href = u;
+    }
     if (d.slToken) connectStreamlabs(d.slToken); // เชื่อม Streamlabs Socket API ครั้งเดียวตอนต่อติด
   };
   ws.onclose = () => setTimeout(connectWS, 2000);
@@ -677,8 +728,9 @@ throwLayer.className = "grp"; throwLayer.id = "throwLayer";
 avatar.insertBefore(throwLayer, zzz); // เหนือตัวโมเดล ใต้ Zzz/อีโมต
 const throws = [];
 const THROW_TARGET = { x: 512, y: 660 }; // จุดชนโดยประมาณ (ตัว/หน้าอก) — ใช้ค่าเดียวพอสำหรับทุกอวตาร
-function spawnThrow(kind) {
+function spawnThrow(kind, remote) {
   const cfg = THROW_KIND[kind]; if (!cfg) return;
+  if (!remote) tell({ fx: kind });
   const edge = Math.floor(Math.random() * 3); // 0=ซ้าย 1=ขวา 2=บน (ไม่เอาล่าง กันโผล่ทะลุพื้น)
   const from = edge === 0 ? { x: -140, y: 200 + Math.random() * 900 }
     : edge === 1 ? { x: 1164, y: 200 + Math.random() * 900 }
@@ -747,8 +799,9 @@ let faceNX = 0, faceNY = 0, faceRoll = 0, faceJaw = 0, faceBlink = 0, faceAt = -
 
 // อีโมต 1-9: กดเลขในหน้านี้ / Ctrl+Alt+เลข ทั้งเครื่อง (ผ่านตัวช่วย) / window.emote(n) จากคอนโซล
 // 1 พยักหน้า 2 ส่ายหน้า 3 ตกใจ 4 เอียงคอ 5 เด้งดีใจ 6 หมุน 7 สั่น 8 หลับ/ตื่น 9 ตื่นเต้น
-function emote(n) {
+function emote(n, remote) {
   if (editMode || n < 1 || n > 9) return;
+  if (!remote) tell({ emote: n });
   lastActive = performance.now();
   playSound("emote_" + n + ".mp3");
   if (n === 8) { sleepForced = !sleepForced; return; }
@@ -1006,7 +1059,8 @@ function connectStreamlabs(token) {
 }
 
 // ---------- แจ้งเตือนโดเนท: window.donate(ชื่อ, จำนวน, ข้อความ) หรือยิง HTTP ผ่านตัวช่วย ----------
-function showDonate(d) {
+function showDonate(d, remote) {
+  if (!remote) tell({ donate: d });
   $("dnName").textContent = d.name || "ผู้ใจดี";
   $("dnAmt").textContent = d.amount ? "— " + d.amount : "";
   $("dnMsg").textContent = d.msg || "";
@@ -1144,7 +1198,7 @@ function loop(now) {
   $("dot").style.background = linked ? "#2e7d46" : "#c33";
   if (debugMode) {
     $("debug").textContent =
-      `avatar: ${AV}  obs: ${obsMode}  helper: ${linked ? "CONNECTED" : "NOT FOUND"}\n` +
+      `avatar: ${AV}  obs: ${obsMode}  helper: ${linked ? "CONNECTED" : "NOT FOUND"}  pupilMask: ${pupilMaskState}\n` +
       `level: ${level.toFixed(3)}  smooth: ${smooth.toFixed(3)}\n` +
       `mouse: ${nx.toFixed(2)}, ${ny.toFixed(2)}  nodes: ${motionNodes.length}`;
   }
@@ -1361,6 +1415,7 @@ function loop(now) {
     const gx = Math.sign(mx2) * Math.sqrt(Math.abs(mx2));
     const gy = Math.sign(my2) * Math.sqrt(Math.abs(my2));
     E.pupils.style.transform = `translate(${gx * def.pupils.range[0]}px, ${gy * def.pupils.range[1]}px)`;
+    if (pupilCanvas && !editMode) drawPupilCanvas(gx * def.pupils.range[0], gy * def.pupils.range[1]);
   }
 
   requestAnimationFrame(loop);

@@ -140,7 +140,14 @@ async def handler(ws):
         except Exception:
             pass
     try:
-        await ws.wait_closed()
+        # รีเลย์: หน้าควบคุม (เบราว์เซอร์) ส่งอีโมต/ปาของ/เปลี่ยนอวตาร → ส่งต่อให้หน้าอื่นทุกตัว (OBS)
+        async for raw in ws:
+            for other in list(CLIENTS):
+                if other is not ws:
+                    try:
+                        await other.send(raw)
+                    except Exception:
+                        CLIENTS.discard(other)
     finally:
         CLIENTS.discard(ws)
         print(">> โมเดลตัดการเชื่อมต่อ (เหลือ %d)" % len(CLIENTS))
