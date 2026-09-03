@@ -219,6 +219,10 @@ const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const VER = Date.now(); // cache-bust: บังคับโหลดรูปล่าสุดทุกครั้ง (กัน OBS จำรูปเก่า)
 
+// ---------- ws + tell ต้องอยู่นอก boot() เพราะปุ่มสลับอวตารด้านล่างเรียกใช้ก่อน boot() จะรัน ----------
+let ws = null;
+const tell = obj => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); };
+
 // ---------- เลือกอวตาร: ?avatar= > ตัวล่าสุดที่จำไว้ > ตัวแรกในรายชื่อ ----------
 const AVATARS = window.AVATARS || [{ id: "car1", name: "car1" }];
 let AV = params.get("avatar") || localStorage.studioAvatar || AVATARS[0].id;
@@ -479,9 +483,8 @@ const debugMode = params.has("debug");
 if (debugMode) $("debug").style.display = "block";
 
 // ---------- helper link (ไมค์+เมาส์ทั้งเครื่อง ผ่าน ws://127.0.0.1:8765) ----------
-let wsData = null, wsAt = -1e9, ws = null;
-// ส่งการกระทำในหน้านี้ (อีโมต/ปาของ/โดเนท/เปลี่ยนอวตาร) ผ่านตัวช่วยไปยังหน้าอื่นที่ต่ออยู่ เช่น OBS
-const tell = obj => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); };
+// ws + tell ประกาศไว้นอก boot() แล้ว (ด้านบนสุดของสคริปต์) เพื่อให้ปุ่มสลับอวตารเรียกได้ก่อน boot() รัน
+let wsData = null, wsAt = -1e9;
 (function connectWS() {
   try { ws = new WebSocket("ws://127.0.0.1:8765"); } catch (e) { setTimeout(connectWS, 3000); return; }
   ws.onmessage = e => {
