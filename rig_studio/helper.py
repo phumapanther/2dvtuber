@@ -50,14 +50,35 @@ def audio_cb(indata, frames, t, status):
     BUF = np.concatenate((BUF, x))[-1024:]
 
 # ---- สระจากเสียงพูด: หา F1/F2 (ฟอร์แมนต์) ด้วย LPC แล้วเทียบสระที่ใกล้สุด → หน้าอวตารเลือกรูปปากตามสระ ----
-# ค่ากลาง F1/F2 (Hz) ของแต่ละสระ — เสียงสูง/ต่ำแต่ละคนฟอร์แมนต์เลื่อนทั้งชุด จึงไม่เทียบตรง ๆ
-# แต่จำ "จุดกลางเสียงผู้พูด" (เฉลี่ยเคลื่อนที่ ~7 วิของการพูด) แล้วเทียบตำแหน่งสระรอบจุดกลางนั้นแทน
-VOWELS = {"A": (780, 1300), "E": (480, 1900), "I": (300, 2250), "O": (480, 880), "U": (320, 780)}
-LOGREF = {v: np.log(f) for v, f in VOWELS.items()}
-REF_C = np.mean(list(LOGREF.values()), axis=0)
-SPK_C = REF_C.copy()
-ADAPT = 0.005       # ความเร็วปรับตัวเข้าหาเสียงผู้พูด ต่อเฟรม (30 เฟรม/วิ)
+# ค่ากลาง F1/F2 (Hz) ของแต่ละสระ: ใช้ของผู้พูดเองจาก vowels.json (ตั้งค่าเสียงสระ.bat) ถ้ามี — แม่นสุด ไม่ต้องเดา
+# ไม่มีก็ใช้ค่ามาตรฐาน + จำสเกลเสียงผู้พูดแบบช้ามาก (~1 นาที, จำกัด ±25%) — ถ้าปรับเร็ว ร้องสระค้าง
+# จุดกลางจะไหลตามจนจับเป็นสระข้าง ๆ (อีค้าง→เอ, อาค้าง→เอ, อูค้าง→โอ)
+VOWELS = {"A": (780, 1300), "E": (480, 1900), "I": (300, 2250), "O": (480, 880), "U": (350, 780)}  # อู F1 ตามที่ LPC วัดได้จริง (ประเมินสูงกว่าตำรานิดหน่อย)
+THAI = {"A": "อา", "E": "เอ", "I": "อี", "O": "โอ", "U": "อู"}
+PROFILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vowels.json")
+REF_C = np.mean([np.log(f) for f in VOWELS.values()], axis=0)
+SHIFT = 0.0         # log ของสเกลเสียงผู้พูดเทียบค่ามาตรฐาน (ใช้เฉพาะตอนไม่มี vowels.json)
+ADAPT = 0.0005      # ต่อเฟรม (30 เฟรม/วิ)
 VOWEL_GATE = 0.004  # เบากว่านี้ = เงียบ ไม่ต้องเดาสระ
+PROFILE, PROFILE_MT, LOGREF = {}, None, {}
+
+def load_profile():
+    """โหลด vowels.json ใหม่เมื่อไฟล์เปลี่ยน (ตั้งค่าเสร็จแล้วใช้ได้เลย ไม่ต้องปิดเปิดตัวช่วย)"""
+    global PROFILE, PROFILE_MT, LOGREF
+    try:
+        mt = os.path.getmtime(PROFILE_PATH)
+    except OSError:
+        mt = None
+    if mt == PROFILE_MT and LOGREF:
+        return
+    PROFILE_MT = mt
+    try:
+        with open(PROFILE_PATH, encoding="utf-8") as f:
+            PROFILE = json.load(f)
+        print("ใช้เสียงสระที่ตั้งค่าไว้:", PROFILE)
+    except (OSError, ValueError):
+        PROFILE = {}
+    LOGREF = {v: np.log(PROFILE.get(v, f)) for v, f in VOWELS.items()}
 
 def formants(x, order=14):
     x = np.append(x[0], x[1:] - 0.97 * x[:-1]) * np.hamming(len(x))  # pre-emphasis + window
@@ -74,23 +95,70 @@ def formants(x, order=14):
     return f if len(f) >= 2 else None
 
 def classify(x):
-    global SPK_C
+    global SHIFT
     f = formants(x)
     if f is None:
         return ""
     lf = np.log(f[:2])
-    SPK_C = SPK_C + (lf - SPK_C) * ADAPT
-    p = lf - SPK_C + REF_C
-    return min(LOGREF, key=lambda v: np.sum((p - LOGREF[v]) ** 2))
+    if not PROFILE:
+        SHIFT = float(np.clip(SHIFT + (np.mean(lf - REF_C) - SHIFT) * ADAPT, -0.22, 0.22))
+    return min(LOGREF, key=lambda v: np.sum((lf - (0 if PROFILE else SHIFT) - LOGREF[v]) ** 2))
+
+def vowel_formants(x):
+    """F1/F2 กลาง (median) ของเสียงสระที่ร้องค้าง — ใช้ตอนตั้งค่า; คืน (ค่า หรือ None ถ้าเสียงน้อยไป, จำนวนช่วงที่ใช้ได้)"""
+    fs = [f[:2] for i in range(0, len(x) - 640, 160)
+          if np.sqrt(np.mean(x[i:i + 640] ** 2)) > VOWEL_GATE and (f := formants(x[i:i + 640])) is not None]
+    if len(fs) < 15:
+        return None, len(fs)
+    return [round(float(v)) for v in np.exp(np.median(np.log(fs), axis=0))], len(fs)
+
+def calibrate(dev):
+    """ร้อง อา เอ อี โอ อู ทีละสระ → vowels.json (+ เก็บเสียงไว้ที่ calib/*.wav เผื่อวิเคราะห์ภายหลัง)"""
+    import wave
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calib")
+    os.makedirs(out, exist_ok=True)
+    prof, rec = {}, {}
+    print("=== ตั้งค่าเสียงสระ: ร้องแต่ละสระค้างไว้ ด้วยเสียงพูดปกติของตัวเอง (ไม่ต้องตะโกน) ===")
+    for v, th in THAI.items():
+        input(f"\nกด Enter แล้วร้อง '{th}' ยาว ๆ ...")
+        print("  ● กำลังฟัง 3 วินาที", flush=True)
+        x = sd.rec(3 * FS, samplerate=FS, channels=1, dtype="float32", device=dev)
+        sd.wait()
+        rec[v] = x = x[:, 0]
+        with wave.open(os.path.join(out, v + ".wav"), "wb") as w:
+            w.setnchannels(1); w.setsampwidth(2); w.setframerate(FS)
+            w.writeframes((np.clip(x, -1, 1) * 32767).astype(np.int16).tobytes())
+        f, n = vowel_formants(x[FS // 3:])  # ตัดช่วงเริ่มออกเสียง
+        if f is None:
+            print(f"  !! เสียงเบาหรือสั้นไป (ใช้ได้ {n} ช่วง) — สระนี้ใช้ค่ามาตรฐาน รันใหม่ได้")
+        else:
+            prof[v] = f
+            print(f"  ได้แล้ว F1={f[0]} F2={f[1]} Hz")
+    with open(PROFILE_PATH, "w", encoding="utf-8") as fh:
+        json.dump(prof, fh)
+    load_profile()
+    print("\n=== ลองจับสระจากเสียงที่เพิ่งร้อง (ยิ่งใกล้ 100% ยิ่งนิ่ง) ===")
+    for v, x in rec.items():
+        got = [classify(x[i:i + 640]) for i in range(FS // 3, len(x) - 640, 533)
+               if np.sqrt(np.mean(x[i:i + 640] ** 2)) > VOWEL_GATE]
+        got = [g for g in got if g]
+        miss = ", ".join(f"{THAI[k]} {got.count(k)}" for k in THAI if k != v and got.count(k))
+        if got:
+            print(f"  {THAI[v]}: ตรง {100 * got.count(v) // len(got)}%" + (f"  (พลาดไปเป็น {miss})" if miss else ""))
+    print("\nบันทึกแล้ว:", PROFILE_PATH, "— ตัวช่วยที่เปิดอยู่จะใช้ค่าใหม่เองภายใน 1 วินาที")
 
 VOWEL, HIST = "", []
 
 def update_vowel():
     """โหวตเสียงข้างมาก 4 เฟรมล่าสุด (~130ms) กันรูปปากกระพริบ"""
     global VOWEL
+    load_profile()
     HIST.append(classify(BUF[-640:]) if LEVEL > VOWEL_GATE else "")
     del HIST[:-4]
-    VOWEL = max(set(HIST), key=HIST.count)
+    VOWEL = vote(HIST)
+
+def vote(hist):
+    return max(set(hist), key=hist.count)
 
 def selftest():
     """สังเคราะห์สระ (พัลส์เสียง + เรโซแนนซ์ F1/F2/F3) เสียงต่ำ/สูง แล้วเช็คว่าจับสระถูก:  python helper.py --selftest"""
@@ -105,17 +173,35 @@ def selftest():
                 out[i] = y[i] + b1 * out[i - 1] + b2 * out[i - 2]
             y = out
         return (y / np.abs(y).max() * 0.3).astype(np.float32)
-    global SPK_C
+    global SHIFT, PROFILE, LOGREF
+    win = lambda s, i: s[4000 + i % 50 * 7:4640 + i % 50 * 7]
     bad = []
     for f0, k in ((110, 0.95), (160, 1.05), (220, 1.18)):  # เสียงต่ำ / กลาง / สูง (ฟอร์แมนต์สูงตาม)
-        sig = {v: synth(f1 * k, f2 * k, f0) for v, (f1, f2) in VOWELS.items()}
-        SPK_C = REF_C.copy()
-        for i in range(120):  # พูดคละสระสักพัก ให้ปรับตัวเข้าหาเสียงนี้
-            for s in sig.values():
-                classify(s[4000 + i * 7:4640 + i * 7])
-        got = {v: classify(s[4000:4640]) for v, s in sig.items()}
-        print(f"  F0={f0}: {got}")
-        bad += [(f0, v, g) for v, g in got.items() if g != v]
+        true = {"A": (780, 1300), "E": (480, 1900), "I": (300, 2250), "O": (480, 880), "U": (320, 780)}  # ตามตำรา
+        sig = {v: synth(f1 * k, f2 * k, f0) for v, (f1, f2) in true.items()}
+        # ไม่ได้ตั้งค่า (ค่ามาตรฐาน + จำสเกลช้า ๆ) — รับประกันแค่เสียงต่ำ/กลาง
+        # ตั้งค่าแล้ว (vowels.json จากเสียงตัวเอง) — ต้องถูกทุกเสียง
+        modes = [("calibrated", {v: vowel_formants(s)[0] for v, s in sig.items()})]
+        if f0 < 200:
+            modes.insert(0, ("default", {}))
+        for mode, prof in modes:
+            PROFILE = prof
+            LOGREF = {v: np.log(prof.get(v, f)) for v, f in VOWELS.items()}
+            SHIFT = 0.0
+            if not prof:
+                for i in range(400):  # พูดคละสระสักพัก (~65 วิ) ให้จำสเกลเสียงนี้
+                    for s in sig.values():
+                        classify(win(s, i))
+            got = {v: classify(s[4000:4640]) for v, s in sig.items()}
+            print(f"  F0={f0} {mode}: {got}")
+            bad += [(f0, mode, v, g) for v, g in got.items() if g != v]
+            for v, s in sig.items():  # ร้องค้างสระเดียว 8 วิ (240 เฟรม) ต้องไม่ไหลไปสระอื่น
+                s0 = SHIFT
+                raw = [classify(win(s, i)) for i in range(240)]
+                drift = [g for i in range(4, 240) if (g := vote(raw[i - 4:i])) != v]  # ผลหลังโหวตแบบที่ใช้จริง
+                SHIFT = s0
+                if drift:
+                    bad.append((f0, mode, v, "sustain", len(drift), drift[0]))
     assert not bad, bad
     print("selftest ok")
 
@@ -293,6 +379,9 @@ async def main():
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         selftest()
+        sys.exit()
+    if "--calibrate" in sys.argv:
+        calibrate(int(sys.argv[sys.argv.index("--dev") + 1]) if "--dev" in sys.argv else None)
         sys.exit()
     try:
         asyncio.run(main())
