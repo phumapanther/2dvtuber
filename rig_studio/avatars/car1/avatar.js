@@ -32,12 +32,14 @@ window.AVATAR_DEF = {
     { part: "หูซ้าย", src: "v6_ear_L.png", pos: [204, 152], origin: [87, 192], motion: "wiggle" },
     { part: "หูขวา", src: "v6_ear_R.png", pos: [628, 141], origin: [91, 212], motion: "wiggle" },
   ],
-  // แถว = ดังขึ้น (เบา/กลาง/ดัง), คอลัมน์ = ทรงปากที่สุ่มสลับระหว่างพูด
-  mouth: { type: "grid", closed: "c1_mouth_closed.png", files: [
-    ["c1_mouth_1.png",    "c1_mouth_small.png", "c1_mouth_0.png"],
-    ["c1_mouth_grin.png", "c1_mouth_3.png",     "c1_mouth_2.png"],
-    ["c1_mouth_2.png",    "c1_mouth_4.png",     "c1_mouth_roar.png"],
-  ]},
+  // ปากตามสระที่ตัวช่วย (helper.py) ฟังได้ — [ปกติ, ตอนพูดดัง]; ไม่มีตัวช่วย = สุ่มสลับทรง
+  mouth: { type: "vowel", closed: "c1_mouth_closed.png", vowels: {
+    A: ["c1_mouth_A.png", "c1_mouth_A2.png"],
+    E: ["c1_mouth_E.png", "c1_mouth_E2.png"],
+    I: ["c1_mouth_I.png"],
+    O: ["c1_mouth_O.png"],
+    U: ["c1_mouth_U.png", "c1_mouth_U2.png"],
+  }},
   blink: { style: "squash" },
   pupils: { mask: "c1_eyes_white.png", range: [10, 6] },
 };

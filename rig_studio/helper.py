@@ -39,10 +39,85 @@ def load_env():
 
 STREAMLABS_TOKEN = load_env().get("STREAMLABS_SOCKET_TOKEN", "")
 
+FS = 16000
+BUF = np.zeros(1024, np.float32)  # เสียงล่าสุด ~64ms ไว้วิเคราะห์สระ
+
 def audio_cb(indata, frames, t, status):
-    global LEVEL
-    rms = float(np.sqrt(np.mean(indata.astype(np.float32) ** 2)))
+    global LEVEL, BUF
+    x = indata[:, 0].astype(np.float32)
+    rms = float(np.sqrt(np.mean(x ** 2)))
     LEVEL = max(LEVEL * 0.6, rms)
+    BUF = np.concatenate((BUF, x))[-1024:]
+
+# ---- สระจากเสียงพูด: หา F1/F2 (ฟอร์แมนต์) ด้วย LPC แล้วเทียบสระที่ใกล้สุด → หน้าอวตารเลือกรูปปากตามสระ ----
+# ค่ากลาง F1/F2 (Hz) ของแต่ละสระ — เสียงสูง/ต่ำแต่ละคนฟอร์แมนต์เลื่อนทั้งชุด จึงไม่เทียบตรง ๆ
+# แต่จำ "จุดกลางเสียงผู้พูด" (เฉลี่ยเคลื่อนที่ ~7 วิของการพูด) แล้วเทียบตำแหน่งสระรอบจุดกลางนั้นแทน
+VOWELS = {"A": (780, 1300), "E": (480, 1900), "I": (300, 2250), "O": (480, 880), "U": (320, 780)}
+LOGREF = {v: np.log(f) for v, f in VOWELS.items()}
+REF_C = np.mean(list(LOGREF.values()), axis=0)
+SPK_C = REF_C.copy()
+ADAPT = 0.005       # ความเร็วปรับตัวเข้าหาเสียงผู้พูด ต่อเฟรม (30 เฟรม/วิ)
+VOWEL_GATE = 0.004  # เบากว่านี้ = เงียบ ไม่ต้องเดาสระ
+
+def formants(x, order=14):
+    x = np.append(x[0], x[1:] - 0.97 * x[:-1]) * np.hamming(len(x))  # pre-emphasis + window
+    r = np.correlate(x, x, "full")[len(x) - 1:len(x) + order]
+    if r[0] <= 1e-9:
+        return None
+    R = r[np.abs(np.subtract.outer(np.arange(order), np.arange(order)))]
+    a = np.linalg.solve(R + np.eye(order) * r[0] * 1e-6, r[1:])
+    roots = np.roots(np.concatenate(([1.0], -a)))
+    roots = roots[roots.imag > 0]
+    f = np.angle(roots) * FS / (2 * np.pi)
+    bw = -np.log(np.abs(roots)) * FS / np.pi
+    f = np.sort(f[(f > 200) & (f < 3500) & (bw < 500)])
+    return f if len(f) >= 2 else None
+
+def classify(x):
+    global SPK_C
+    f = formants(x)
+    if f is None:
+        return ""
+    lf = np.log(f[:2])
+    SPK_C = SPK_C + (lf - SPK_C) * ADAPT
+    p = lf - SPK_C + REF_C
+    return min(LOGREF, key=lambda v: np.sum((p - LOGREF[v]) ** 2))
+
+VOWEL, HIST = "", []
+
+def update_vowel():
+    """โหวตเสียงข้างมาก 4 เฟรมล่าสุด (~130ms) กันรูปปากกระพริบ"""
+    global VOWEL
+    HIST.append(classify(BUF[-640:]) if LEVEL > VOWEL_GATE else "")
+    del HIST[:-4]
+    VOWEL = max(set(HIST), key=HIST.count)
+
+def selftest():
+    """สังเคราะห์สระ (พัลส์เสียง + เรโซแนนซ์ F1/F2/F3) เสียงต่ำ/สูง แล้วเช็คว่าจับสระถูก:  python helper.py --selftest"""
+    def synth(f1, f2, f0, n=FS // 2):
+        y = np.zeros(n)
+        y[::FS // f0] = 1.0
+        for fc, bw in ((f1, 80), (f2, 110), (2600, 160)):
+            rr = np.exp(-np.pi * bw / FS)
+            b1, b2 = 2 * rr * np.cos(2 * np.pi * fc / FS), -rr * rr
+            out = np.zeros(n)
+            for i in range(n):
+                out[i] = y[i] + b1 * out[i - 1] + b2 * out[i - 2]
+            y = out
+        return (y / np.abs(y).max() * 0.3).astype(np.float32)
+    global SPK_C
+    bad = []
+    for f0, k in ((110, 0.95), (160, 1.05), (220, 1.18)):  # เสียงต่ำ / กลาง / สูง (ฟอร์แมนต์สูงตาม)
+        sig = {v: synth(f1 * k, f2 * k, f0) for v, (f1, f2) in VOWELS.items()}
+        SPK_C = REF_C.copy()
+        for i in range(120):  # พูดคละสระสักพัก ให้ปรับตัวเข้าหาเสียงนี้
+            for s in sig.values():
+                classify(s[4000 + i * 7:4640 + i * 7])
+        got = {v: classify(s[4000:4640]) for v, s in sig.items()}
+        print(f"  F0={f0}: {got}")
+        bad += [(f0, v, g) for v, g in got.items() if g != v]
+    assert not bad, bad
+    print("selftest ok")
 
 def cursor():
     pt = ctypes.wintypes.POINT()
@@ -157,7 +232,8 @@ async def broadcaster():
     while True:
         mx, my = cursor()
         poll_keys()
-        msg_d = {"level": round(LEVEL, 4), "mx": mx, "my": my,
+        update_vowel()
+        msg_d = {"level": round(LEVEL, 4), "vowel": VOWEL, "mx": mx, "my": my,
                  "vx": VX, "vy": VY, "vw": VW, "vh": VH,
                  "keys": typed, "mb": 1 if GAK(0x01) & 0x8000 else 0,
                  "emote": emote_hot}
@@ -177,7 +253,7 @@ async def broadcaster():
         now = time.time()
         if LEVEL > 0.01 and now - LAST_PRINT > 0.25:
             LAST_PRINT = now
-            print("เสียง: " + "#" * min(40, int(LEVEL * 300)))
+            print("เสียง: " + "#" * min(40, int(LEVEL * 300)) + "  " + VOWEL)
         LEVEL *= 0.9
         await asyncio.sleep(1 / 30)
 
@@ -190,7 +266,7 @@ async def main():
     if "--dev" in sys.argv:
         dev = int(sys.argv[sys.argv.index("--dev") + 1])
     try:
-        stream = sd.InputStream(device=dev, channels=1, samplerate=16000,
+        stream = sd.InputStream(device=dev, channels=1, samplerate=FS,
                                 blocksize=512, callback=audio_cb)
         stream.start()
         name = sd.query_devices(dev if dev is not None else sd.default.device[0])["name"]
@@ -215,6 +291,9 @@ async def main():
     await broadcaster()
 
 if __name__ == "__main__":
+    if "--selftest" in sys.argv:
+        selftest()
+        sys.exit()
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

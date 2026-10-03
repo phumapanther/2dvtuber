@@ -50,12 +50,13 @@ for src, out in [
     (SRC + "ไม่มีชื่อ 62_20260820214005.png", "c1_brows.png"),
     (SRC + "v6_eyes_closed.png", "c1_eyes_closed.png"),
     (SRC + "ผม.png", "c1_hair.png"),
-    (SRC + "v6_mouth_0.png", "c1_mouth_0.png"),
-    (SRC + "v6_mouth_1.png", "c1_mouth_1.png"),
-    (SRC + "v6_mouth_3.png", "c1_mouth_3.png"),
-    (SRC + "v6_mouth_4.png", "c1_mouth_4.png"),
-    (SRC + "car5_mouth_1A.png", "c1_mouth_grin.png"),
-    (SRC + "car5_mouth_2B.png", "c1_mouth_small.png"),
+    # ปากตามสระ: ชื่อไฟล์ต่อท้าย _สระ (เลข 2 = ตอนพูดดัง)
+    (SRC + "v6_mouth_0_A.png", "c1_mouth_A.png"),
+    (SRC + "car5_mouth_1A_E.png", "c1_mouth_E.png"),
+    (SRC + "v6_mouth_4_I.png", "c1_mouth_I.png"),
+    (SRC + "v6_mouth_3_o.png", "c1_mouth_O.png"),
+    (SRC + "car5_mouth_2B_U.png", "c1_mouth_U.png"),
+    (SRC + "v6_mouth_1_U2.png", "c1_mouth_U2.png"),
 ]:
     save(load(src), out)
 
@@ -76,5 +77,5 @@ save(rows(nm, 0, 877), "c1_nose.png")
 save(rows(nm, 877, 2085), "c1_mouth_closed.png")
 
 # สองไฟล์นี้วาดสูงไปทับจมูก — เลื่อนลงให้ขอบบนตรงร่องจมูกเหมือนปากอื่น (ยอดบน ~y866 กลาง x~688)
-save(shift(rows(load(SRC + "v6_mouth_2.png"), 0, 850), 0, 170), "c1_mouth_2.png")  # ตัดเศษจาง ๆ แถว 891+ ทิ้ง
-save(shift(load(SRC + "car5_mouth_3A.png"), -32, 192), "c1_mouth_roar.png")
+save(shift(rows(load(SRC + "v6_mouth_2_E2.png"), 0, 850), 0, 170), "c1_mouth_E2.png")  # ตัดเศษจาง ๆ แถว 891+ ทิ้ง
+save(shift(load(SRC + "car5_mouth_3A_A2.png"), -32, 192), "c1_mouth_A2.png")

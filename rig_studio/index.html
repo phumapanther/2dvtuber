@@ -426,6 +426,10 @@ function buildMouth(parent) {
   if (m.type === "grid") {
     E.mouthGrid = m.files.map(row => row.map(mk));
     E.mouthGrid.forEach(r => r.forEach(el => el.style.opacity = 0));
+  } else if (m.type === "vowel") {
+    E.mouthV = {};
+    for (const k in m.vowels) E.mouthV[k] = m.vowels[k].map(mk);
+    Object.values(E.mouthV).flat().forEach(el => el.style.opacity = 0);
   } else {
     E.mouthFrames = m.frames.map(mk);
     E.mouthFrames.forEach(el => el.style.opacity = 0);
@@ -540,11 +544,26 @@ class Spring {
 const nz = (t, a, b, c) =>
   Math.sin(t * a) * 0.55 + Math.sin(t * b + 1.7) * 0.3 + Math.sin(t * c + 4.1) * 0.15;
 
-// ---------- ปาก (รองรับ 2 ระบบ: เฟรมเรียง N ภาพ / 3 ระดับเสียง x 3 สระ) ----------
-let vowel = 0, nextVowel = 0;
+// ---------- ปาก (รองรับ 3 ระบบ: เฟรมเรียง N ภาพ / 3 ระดับเสียง x 3 สระ / ตามสระที่ตัวช่วยฟังได้) ----------
+let vowel = 0, nextVowel = 0, vKey = "A", vAt = 0, vBig = false;
 function setMouth01(o, now) {
   o = Math.max(0, Math.min(1, o));
-  if (E.mouthGrid) {
+  if (E.mouthV) {
+    const keys = Object.keys(E.mouthV);
+    const wv = wsFresh(now) ? wsData.vowel : undefined;
+    if (wv !== undefined) {               // ตัวช่วยส่งสระมา ("" = เงียบ)
+      if (E.mouthV[wv]) { vKey = wv; vAt = now; }
+      else if (now - vAt > 400) vKey = E.mouthV.A ? "A" : keys[0]; // เงียบนาน (เช่น หาว) = ปากอ้าแบบ A
+    } else if (o > 0.12 && now >= nextVowel) { // ไม่มีข้อมูลสระ (ไมค์ในหน้า/ตัวช่วยรุ่นเก่า) = สุ่มสลับทรง
+      vKey = keys[Math.floor(Math.random() * keys.length)];
+      nextVowel = now + 130 + Math.random() * 170;
+    }
+    vBig = o > (vBig ? 0.5 : 0.62);       // รูปที่ 2 = ตอนพูดดัง (กันกระพริบตรงรอยต่อ)
+    const fr = E.mouthV[vKey] || E.mouthV[keys[0]], el = fr[vBig && fr.length > 1 ? 1 : 0];
+    const t = Math.min(1, o * 3);
+    for (const k of keys) for (const e of E.mouthV[k]) e.style.opacity = e === el ? t : 0;
+    if (E.mouth0) E.mouth0.style.opacity = Math.max(0, 1 - t * 2);
+  } else if (E.mouthGrid) {
     const v = o * 3;
     if (v > 0.35 && now >= nextVowel) {
       vowel = (vowel + 1 + Math.floor(Math.random() * 2)) % 3;
