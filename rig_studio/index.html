@@ -331,6 +331,20 @@ if (!def) { alert("ไม่พบ " + DIR + "avatar.js — เช็คชื�
 document.title = def.name + " — Rig Studio";
 
 const LKEY = "studio_" + AV + "_layout", PKEY = "studio_" + AV + "_presets";
+// avatar.js เปลี่ยน rev (ริกใหม่ ชิ้นชื่อเดิมแต่รูปใหม่) → ค่าเลื่อน/ย่อที่จัดไว้กับชิ้นชุดเก่าจะทำชิ้นใหม่เพี้ยน
+// เก็บ layout เก่าไว้เป็นพรีเซ็ท "ก่อนริก rev N" แล้วเริ่มจากค่าในริก (ทำครั้งเดียวต่อเบราว์เซอร์)
+const RKEY = "studio_" + AV + "_rev";
+if (def.rev && localStorage[RKEY] !== String(def.rev)) {
+  try {
+    if (localStorage[LKEY]) {
+      const p = JSON.parse(localStorage[PKEY] || "{}");
+      p["ก่อนริก rev " + def.rev] = JSON.parse(localStorage[LKEY]);
+      localStorage[PKEY] = JSON.stringify(p);
+    }
+    localStorage.removeItem(LKEY);
+  } catch (e) {}
+  localStorage[RKEY] = def.rev;
+}
 // ลำดับค่า: ลิงก์ ?layout= > localStorage (เบราว์เซอร์ที่ตั้งค่า) > layout.js ในโฟลเดอร์ (เครื่อง/OBS อื่น)
 let layout = {};
 try { layout = JSON.parse(params.get("layout") || localStorage[LKEY] || "null") || window.SAVED_LAYOUT || {}; }
@@ -408,11 +422,11 @@ function buildMouth(parent) {
     parent.append(el);
     return el;
   };
+  if (m.closed) E.mouth0 = mk(m.closed); // ปากปิด (ไม่ได้วาดติดหน้าไว้) — จางหายตอนเริ่มพูด
   if (m.type === "grid") {
     E.mouthGrid = m.files.map(row => row.map(mk));
     E.mouthGrid.forEach(r => r.forEach(el => el.style.opacity = 0));
   } else {
-    if (m.closed) E.mouth0 = mk(m.closed);
     E.mouthFrames = m.frames.map(mk);
     E.mouthFrames.forEach(el => el.style.opacity = 0);
   }
@@ -541,6 +555,7 @@ function setMouth01(o, now) {
       for (let k = 0; k < 3; k++)
         E.mouthGrid[l - 1][k].style.opacity =
           (k !== vowel) ? 0 : (l === i) ? 1 : (l === i + 1) ? frac : 0;
+    if (E.mouth0) E.mouth0.style.opacity = Math.max(0, 1 - v * 2);
   } else if (E.mouthFrames) {
     const N = E.mouthFrames.length, v = o * N;
     const i = Math.floor(v), frac = v - i;

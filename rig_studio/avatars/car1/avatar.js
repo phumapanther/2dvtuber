@@ -1,35 +1,43 @@
-// อวตาร: เสือฮู้ด (จาก rig_car_1 v6)
+// อวตาร: เสือฮู้ด — ริก rev 2 (2026-10-03) จากอาร์ตใน แมว/ (ของเดิมอยู่ เก่า-v6/)
+// c1_*.png = ไฟล์ที่ bake_car1.py สร้าง (ห้ามแก้ตรง ๆ) — แก้รูปใน แมว/ แล้วรัน python bake_car1.py
 // node แบบ img:   {part:"ชื่อ", src:"ไฟล์", pos:[left,top]?, w:กว้าง?, origin:[x,y]?, motion:"แบบขยับ"?, k:แรง?}
 // node แบบกลุ่ม: {id:"ชื่อ", origin:[x,y], motion:"แบบขยับ", children:[...]}
 // motion: none | head | face | sway | wiggle | pendulum | bob | float | blush
 window.AVATAR_DEF = {
   name: "เสือฮู้ด",
-  // Hood_*.png เป็นอาร์ตบนแคนวาสวาด 1476x2085 — วางลงริกด้วยสเกล 0.77: pos [-60, 38] + w 1137
+  rev: 2, // เปลี่ยนเลขเมื่อเปลี่ยนชุดรูป → ค่าจัดชิ้นเก่าในเบราว์เซอร์ถูกเก็บเป็นพรีเซ็ท "ก่อนริก rev N" แล้วเริ่มใหม่
   layers: [
+    { part: "หาง", src: "c1_tail.png", origin: [540, 1475], motion: "pendulum" },
+    { part: "พื้นในฮู้ด", src: "c1_hood_fill.png" },
     { part: "เงาในฮู้ด", src: "v6_jacket_in.png" },
-    { part: "ขอบฮู้ดหลัง", src: "Hood_in.png", pos: [-60, 38], w: 1137 },
-    { part: "คอ", src: "v6_neck.png" },
-    { id: "head", origin: [490, 880], motion: "head", children: [
-      { part: "หัว", src: "v6_head_base.png" },
-      { id: "face", origin: [490, 520], motion: "face", children: [
-        { part: "หน้า", src: "v6_face_noeyes.png" },
-        { special: "eyesC", part: "ตาหลับ", src: "v6_eyes_closed.png" },
-        { id: "eyesOpen", origin: [489, 546], children: [
-          { part: "ตาขาว", src: "v6_eyes_white.png" },
-          // ตาดำ: คาลิเบรตแยกจากฮู้ด — จุดศูนย์ถ่วงเนื้อตาขาว + ถ่างออกข้างละ 3px (จูนด้วยตา กันเหล่)
-          { special: "pupils", part: "ตาดำ", src: "v6_pupils.png", pos: [-54, 46], w: 1123 },
-          { part: "คิ้ว+ขนตา", src: "v6_eyes_top.png" },
+    { part: "ขอบฮู้ดหลัง", src: "c1_hood_in.png" },
+    { part: "คอ", src: "c1_neck.png" },
+    { id: "head", origin: [478, 880], motion: "head", children: [
+      { part: "หน้า", src: "c1_face.png" },
+      { id: "face", origin: [494, 514], motion: "face", children: [
+        { special: "eyesC", part: "ตาหลับ", src: "c1_eyes_closed.png" },
+        { id: "eyesOpen", origin: [494, 514], children: [
+          { part: "ตาขาว", src: "c1_eyes_white.png" },
+          { special: "pupils", part: "ตาดำ", src: "c1_pupils.png" },
+          { part: "ขนตา", src: "c1_lashes.png" },
         ]},
+        { part: "คิ้ว", src: "c1_brows.png" }, // นอก eyesOpen — คิ้วไม่ยุบตามตอนกะพริบ
+        { part: "จมูก", src: "c1_nose.png" },
         { special: "mouth" },
       ]},
-      { part: "ผม", src: "v6_hair.png", origin: [490, 300], motion: "sway" },
+      { part: "ผม", src: "c1_hair.png", origin: [490, 300], motion: "sway" },
     ]},
     { part: "ฮู้ด", src: "v6_jacket_out.png" },
-    { part: "ขอบฮู้ดหน้า", src: "Hood_out.png", pos: [-60, 38], w: 1137 },
+    { part: "ขอบฮู้ดหน้า", src: "c1_hood_out.png" },
     { part: "หูซ้าย", src: "v6_ear_L.png", pos: [204, 152], origin: [87, 192], motion: "wiggle" },
     { part: "หูขวา", src: "v6_ear_R.png", pos: [628, 141], origin: [91, 212], motion: "wiggle" },
   ],
-  mouth: { type: "frames", posLT: [386, 695], frames: ["v6_mouth_1.png", "v6_mouth_2.png", "v6_mouth_3.png", "v6_mouth_4.png"] },
+  // แถว = ดังขึ้น (เบา/กลาง/ดัง), คอลัมน์ = ทรงปากที่สุ่มสลับระหว่างพูด
+  mouth: { type: "grid", closed: "c1_mouth_closed.png", files: [
+    ["c1_mouth_1.png",    "c1_mouth_small.png", "c1_mouth_0.png"],
+    ["c1_mouth_grin.png", "c1_mouth_3.png",     "c1_mouth_2.png"],
+    ["c1_mouth_2.png",    "c1_mouth_4.png",     "c1_mouth_roar.png"],
+  ]},
   blink: { style: "squash" },
-  pupils: { mask: "v6_eyes_white.png", range: [10, 6] },
+  pupils: { mask: "c1_eyes_white.png", range: [10, 6] },
 };
